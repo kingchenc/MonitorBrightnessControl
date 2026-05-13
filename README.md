@@ -17,16 +17,14 @@ A small, fast desktop app for controlling brightness, contrast, color temperatur
 
 ## Screenshots
 
-> _Placeholder images — drop the real PNGs under [`docs/screenshots/`](docs/screenshots/) (see [its README](docs/screenshots/README.md) for sizes and what each shot should contain)._
-
 | | |
 |---|---|
-| ![System tray expanded](docs/screenshots/tray.png) | ![Monitors tab](docs/screenshots/monitors.png) |
-| **System tray** — per-monitor submenus + Apply-profile picker. | **Monitors** — brightness, contrast and color-preset controls per display. |
-| ![Settings tab](docs/screenshots/settings.png) | ![Profiles tab](docs/screenshots/profiles.png) |
-| **Settings** — startup, language, hotkeys, auto-dim, schedules, sync. | **Profiles** — per-app overrides; loads current monitor values when you create a new one. |
-| ![About tab](docs/screenshots/about.png) | |
-| **About** — version, links, license. | |
+| <img src="docs/screenshots/monitor_page.png" alt="Monitors tab" width="420"> | <img src="docs/screenshots/profile_page.png" alt="Profiles tab" width="420"> |
+| **Monitors** — brightness, contrast and color-preset per display. Real EDID names (`PHL 27E1N1800A`, `AUS XG27UCS`); status badge for external vs internal. | **Profiles** — per-app overrides with sliders, no JSON. App identifier is optional — empty profiles apply manually from the tray. Each monitor's overrides toggle independently. |
+| <img src="docs/screenshots/settings_1_page.png" alt="Settings tab top" width="420"> | <img src="docs/screenshots/settings_0_page.png" alt="Settings tab bottom" width="420"> |
+| **Settings (top)** — startup, language, hotkeys, auto-dim coordinates. | **Settings (bottom)** — schedules, multi-monitor sync. The tab scrolls; these are the top and bottom views. |
+| <img src="docs/screenshots/system_tray.png" alt="System tray menu" width="280"> | <img src="docs/screenshots/about_page.png" alt="About tab" width="420"> |
+| **System tray** — per-monitor brightness submenus, "Apply profile" picker (visible once you have a profile), night-mode toggle. | **About** — version, links, license, and the as-is disclaimer in your locale. |
 
 ## Platform support
 

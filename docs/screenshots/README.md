@@ -1,15 +1,14 @@
 # Screenshots
 
-Drop screenshots here with the exact filenames the README references:
+Source PNGs for the gallery in the project [`README.md`](../../README.md).
 
-| File | What to capture | Suggested size |
+| File | Tab / view | Notes |
 |---|---|---|
-| `tray.png` | System-tray icon expanded — per-monitor brightness submenus, "Apply profile" submenu (with at least one profile), "Toggle night mode", "Show window", "Quit". | ~280 × 500 px |
-| `monitors.png` | Monitors tab with at least two monitors: brightness sliders, contrast slider and color-preset dropdown for external displays. | ~720 × 540 px |
-| `settings.png` | Settings tab showing Startup, Language, Hotkeys, Auto-dim, Schedules (with one or two entries expanded) and Multi-monitor sync cards. | ~720 × 900 px |
-| `profiles.png` | Profiles tab with one profile expanded — name, optional app identifier, per-monitor override cards with the brightness/contrast/color sliders. | ~720 × 720 px |
-| `about.png` | About tab. | ~720 × 360 px |
+| `monitor_page.png` | Monitors | Brightness, contrast, color-preset sliders per display. |
+| `profile_page.png` | Profiles | Per-app profile editor with per-monitor override toggles. |
+| `settings_0_page.png` | Settings (bottom) | Schedules + multi-monitor sync section. |
+| `settings_1_page.png` | Settings (top) | Startup, language, hotkeys, auto-dim. |
+| `about_page.png` | About | Version, license, as-is disclaimer. |
+| `system_tray.png` | System tray | Per-monitor submenus, Apply-profile picker, night-mode toggle. |
 
-Format: PNG, 1× DPI is fine. Light or dark mode — pick whichever looks cleaner; the README captions are theme-agnostic.
-
-After saving them, run `npm run build && cargo build --release -p monitor-brightness-control --features custom-protocol` is **not** required — the README only references these files, the app itself doesn't bundle them.
+To refresh these, run the app, take new screenshots at the same Windows scaling (these were captured at 100% on a 1080p panel), and overwrite the files in place — the README references them by these exact filenames, no other change needed.
