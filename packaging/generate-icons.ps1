@@ -102,8 +102,10 @@ function New-Ico {
         $w = $img.Width; $h = $img.Height
         $img.Dispose()
         $size = $datas[$i].Length
-        $bw.Write([byte]([Math]::Min($w, 255)))
-        $bw.Write([byte]([Math]::Min($h, 255)))
+        # ICO width/height are single bytes; 0 encodes 256 (the format
+        # cannot represent any dimension > 256 in this header).
+        $bw.Write([byte]($(if ($w -ge 256) { 0 } else { $w })))
+        $bw.Write([byte]($(if ($h -ge 256) { 0 } else { $h })))
         $bw.Write([byte]0)
         $bw.Write([byte]0)
         $bw.Write([uint16]1)
