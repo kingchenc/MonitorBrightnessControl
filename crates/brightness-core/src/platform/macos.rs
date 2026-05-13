@@ -24,7 +24,7 @@
 //!   non-builtin order, which empirically tracks DCP enumeration on Apple
 //!   Silicon.
 
-use std::ffi::{c_void, CString};
+use std::ffi::{CString, c_void};
 use std::os::raw::c_char;
 use std::sync::Arc;
 
@@ -36,8 +36,8 @@ use parking_lot::Mutex;
 
 use crate::caps::{self, Capabilities};
 use crate::ddc::{
-    self, decode_capabilities_reply, decode_get_vcp_reply, DDC_ADDR, MIN_INTERVAL_MS,
-    VCP_REQUEST_REPLY_DELAY_MS,
+    self, DDC_ADDR, MIN_INTERVAL_MS, VCP_REQUEST_REPLY_DELAY_MS, decode_capabilities_reply,
+    decode_get_vcp_reply,
 };
 use crate::error::{Error, Result};
 use crate::monitor::{Monitor, MonitorHandle, MonitorId, MonitorInfo, MonitorKind, MonitorManager};
@@ -62,7 +62,7 @@ const KERN_SUCCESS: kern_return_t = 0;
 const IO_OBJECT_NULL: io_object_t = 0;
 
 #[link(name = "IOKit", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     fn IOServiceMatching(name: *const c_char) -> CFTypeRef;
     fn IOServiceGetMatchingServices(
         main_port: u32,
@@ -81,14 +81,14 @@ extern "C" {
 }
 
 #[link(name = "CoreFoundation", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     fn CFEqual(a: CFTypeRef, b: CFTypeRef) -> u8;
 }
 
 // IOAVService is exposed by `CoreDisplay.framework`. The headers are not
 // public; the symbols are stable (used by `m1ddc`, MonitorControl, etc.).
 #[link(name = "CoreDisplay", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     fn IOAVServiceCreateWithService(allocator: CFTypeRef, service: io_service_t) -> CFTypeRef;
     fn IOAVServiceWriteI2C(
         service: CFTypeRef,
@@ -449,7 +449,7 @@ impl ExternalDisplay {
         debug_assert!(frame.len() >= 2, "frame must include at least LEN byte");
         let chip = (DDC_ADDR as u32) << 1; // 0x6E
         let offset = frame[1] as u32; // the LEN byte serves as offset
-                                      // SAFETY: av is non-null; data pointer is valid for `len` bytes.
+        // SAFETY: av is non-null; data pointer is valid for `len` bytes.
         let kr = unsafe {
             IOAVServiceWriteI2C(
                 self.av.0,

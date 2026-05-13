@@ -6,7 +6,7 @@
 use std::process::ExitCode;
 use std::time::Instant;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use brightness_core::{
     monitor::{Monitor, MonitorManager},
     platform::default_manager,

@@ -7,9 +7,9 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.77"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.85"
 authors = ["kingchenc"]
 license = "LicenseRef-Proprietary"
 repository = "https://github.com/kingchenc/MonitorBrightnessControl"

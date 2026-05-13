@@ -5,8 +5,8 @@
 //! through this type so locking is uniform.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use brightness_core::{Monitor, MonitorManager};
 use parking_lot::RwLock;

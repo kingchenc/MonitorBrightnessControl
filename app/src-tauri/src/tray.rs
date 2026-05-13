@@ -7,9 +7,9 @@
 use std::sync::Arc;
 
 use tauri::{
+    AppHandle, Manager,
     menu::{Menu, MenuBuilder, MenuEvent, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
 };
 
 use crate::state::AppState;

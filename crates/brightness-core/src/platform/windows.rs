@@ -23,25 +23,25 @@ use std::sync::mpsc;
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::Devices::Display::{
     CapabilitiesRequestAndCapabilitiesReply, DestroyPhysicalMonitor, GetCapabilitiesStringLength,
     GetMonitorCapabilities, GetNumberOfPhysicalMonitorsFromHMONITOR,
-    GetPhysicalMonitorsFromHMONITOR, GetVCPFeatureAndVCPFeatureReply, SetVCPFeature,
-    MC_CAPS_BRIGHTNESS, MC_VCP_CODE_TYPE, PHYSICAL_MONITOR,
+    GetPhysicalMonitorsFromHMONITOR, GetVCPFeatureAndVCPFeatureReply, MC_CAPS_BRIGHTNESS,
+    MC_VCP_CODE_TYPE, PHYSICAL_MONITOR, SetVCPFeature,
 };
 use windows::Win32::Foundation::{BOOL, HANDLE, LPARAM, RECT};
 use windows::Win32::Graphics::Gdi::{
-    EnumDisplayDevicesW, EnumDisplayMonitors, GetMonitorInfoW, DISPLAY_DEVICEW, HDC, HMONITOR,
+    DISPLAY_DEVICEW, EnumDisplayDevicesW, EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR,
     MONITORINFOEXW,
 };
+use windows::core::{HSTRING, PCWSTR};
 
 /// `EDD_GET_DEVICE_INTERFACE_NAME` flag: not exposed by `windows` 0.58.
 /// Defined in `<wingdi.h>` as `0x00000001`.
 const EDD_GET_DEVICE_INTERFACE_NAME: u32 = 0x0000_0001;
 use windows::Win32::System::Registry::{
-    RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ,
-    REG_VALUE_TYPE,
+    HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_VALUE_TYPE, RegCloseKey, RegOpenKeyExW,
+    RegQueryValueExW,
 };
 use wmi::{COMLibrary, WMIConnection};
 

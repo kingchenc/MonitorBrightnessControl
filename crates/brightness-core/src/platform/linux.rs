@@ -33,8 +33,8 @@ use parking_lot::Mutex;
 
 use crate::caps::{self, Capabilities};
 use crate::ddc::{
-    self, decode_capabilities_reply, decode_get_vcp_reply, DDC_ADDR, MIN_INTERVAL_MS,
-    VCP_REQUEST_REPLY_DELAY_MS,
+    self, DDC_ADDR, MIN_INTERVAL_MS, VCP_REQUEST_REPLY_DELAY_MS, decode_capabilities_reply,
+    decode_get_vcp_reply,
 };
 use crate::error::{Error, Result};
 use crate::monitor::{Monitor, MonitorHandle, MonitorId, MonitorInfo, MonitorKind, MonitorManager};

@@ -24,15 +24,17 @@ pub fn install(app: AppHandle, state: Arc<AppState>) {
     // per-minute loop where async buys us nothing).
     std::thread::Builder::new()
         .name("auto-dim".into())
-        .spawn(move || loop {
-            std::thread::sleep(Duration::from_secs(60));
-            let s = state.settings();
-            if !s.auto_dim.enabled {
-                continue;
+        .spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(60));
+                let s = state.settings();
+                if !s.auto_dim.enabled {
+                    continue;
+                }
+                let now = Utc::now();
+                let target = compute_target(&s.auto_dim, now);
+                apply_target(&state, target);
             }
-            let now = Utc::now();
-            let target = compute_target(&s.auto_dim, now);
-            apply_target(&state, target);
         })
         .ok();
 }
