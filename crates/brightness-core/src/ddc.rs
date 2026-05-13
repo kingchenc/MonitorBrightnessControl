@@ -240,8 +240,10 @@ mod tests {
             0x00,        // result = 0 (ok)
             0x10,        // vcp code
             0x00,        // type
-            0x00, 0x64, // max = 100
-            0x00, 0x32, // current = 50
+            0x00,
+            0x64, // max = 100
+            0x00,
+            0x32, // current = 50
         ];
         let mut buf = payload.to_vec();
         buf.push(reply_checksum(&payload));
@@ -256,7 +258,16 @@ mod tests {
     #[test]
     fn decode_get_vcp_reply_rejects_bad_checksum() {
         let payload = [
-            DISPLAY_SRC, 0x88, 0x02, 0x00, 0x10, 0x00, 0x00, 0x64, 0x00, 0x32,
+            DISPLAY_SRC,
+            0x88,
+            0x02,
+            0x00,
+            0x10,
+            0x00,
+            0x00,
+            0x64,
+            0x00,
+            0x32,
         ];
         let mut buf = payload.to_vec();
         buf.push(0xFF); // bad
@@ -267,7 +278,16 @@ mod tests {
     #[test]
     fn decode_get_vcp_reply_rejects_unsupported() {
         let payload = [
-            DISPLAY_SRC, 0x88, 0x02, 0x01, 0x10, 0x00, 0x00, 0x64, 0x00, 0x32,
+            DISPLAY_SRC,
+            0x88,
+            0x02,
+            0x01,
+            0x10,
+            0x00,
+            0x00,
+            0x64,
+            0x00,
+            0x32,
         ];
         let mut buf = payload.to_vec();
         buf.push(reply_checksum(&payload));

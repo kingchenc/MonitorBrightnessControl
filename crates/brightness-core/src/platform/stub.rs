@@ -7,7 +7,9 @@ pub struct Manager;
 
 impl Manager {
     pub fn new() -> Result<Self> {
-        Err(Error::Unsupported("brightness-core has no backend for this platform"))
+        Err(Error::Unsupported(
+            "brightness-core has no backend for this platform",
+        ))
     }
 }
 

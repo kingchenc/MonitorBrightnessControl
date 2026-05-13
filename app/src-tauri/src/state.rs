@@ -143,12 +143,13 @@ impl AppState {
     pub fn apply_initial_settings(&self) {
         let settings = self.settings();
         for m in self.monitors_snapshot() {
-            if let Some(pct) = settings.initial_brightness.get(m.info().id.as_str()).copied() {
+            if let Some(pct) = settings
+                .initial_brightness
+                .get(m.info().id.as_str())
+                .copied()
+            {
                 if let Err(e) = m.set_brightness_percent(pct as f32) {
-                    log::warn!(
-                        "apply initial brightness {pct}% to {}: {e}",
-                        m.info().id
-                    );
+                    log::warn!("apply initial brightness {pct}% to {}: {e}", m.info().id);
                 }
             }
         }
@@ -162,7 +163,11 @@ impl AppState {
     }
 
     /// Apply a brightness percentage to one monitor or all.
-    pub fn set_brightness(&self, id: Option<&str>, percent: f32) -> Vec<(String, Result<(), String>)> {
+    pub fn set_brightness(
+        &self,
+        id: Option<&str>,
+        percent: f32,
+    ) -> Vec<(String, Result<(), String>)> {
         let mut out = Vec::new();
         let monitors = self.monitors_snapshot();
         for m in monitors {
@@ -172,9 +177,7 @@ impl AppState {
                     continue;
                 }
             }
-            let r = m
-                .set_brightness_percent(percent)
-                .map_err(|e| e.to_string());
+            let r = m.set_brightness_percent(percent).map_err(|e| e.to_string());
             if r.is_ok() {
                 self.brightness_cache
                     .write()

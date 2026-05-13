@@ -146,17 +146,16 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Get(sel) => cmd_get(&monitors, sel, cli.format),
         Command::Set { sel, value } => cmd_set(&monitors, sel, value, cli.format),
         Command::GetVcp { sel, code } => cmd_get_vcp(&monitors, sel, code.0, cli.format),
-        Command::SetVcp { sel, code, value } => cmd_set_vcp(&monitors, sel, code.0, value, cli.format),
+        Command::SetVcp { sel, code, value } => {
+            cmd_set_vcp(&monitors, sel, code.0, value, cli.format)
+        }
         Command::Capabilities(sel) => cmd_caps(&monitors, sel, cli.format),
         Command::Step { sel, delta } => cmd_step(&monitors, sel, delta, cli.format),
         Command::Benchmark { iterations } => cmd_benchmark(mgr.as_ref(), iterations, cli.format),
     }
 }
 
-fn select<'a>(
-    monitors: &'a [Monitor],
-    sel: &SelectArgs,
-) -> anyhow::Result<Vec<&'a Monitor>> {
+fn select<'a>(monitors: &'a [Monitor], sel: &SelectArgs) -> anyhow::Result<Vec<&'a Monitor>> {
     if let Some(id) = &sel.id {
         let m = monitors
             .iter()

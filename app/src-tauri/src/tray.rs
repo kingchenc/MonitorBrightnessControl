@@ -74,20 +74,14 @@ fn build_menu(app: &AppHandle, state: &AppState) -> tauri::Result<Menu<tauri::Wr
             let mut sub = SubmenuBuilder::new(app, format!("{} ({pct_text})", m.name));
             for &v in &[100u8, 80, 60, 40, 20, 10, 5, 0] {
                 sub = sub.item(
-                    &MenuItemBuilder::with_id(
-                        format!("set:{}::{v}", m.id),
-                        format!("{}%", v),
-                    )
-                    .build(app)?,
+                    &MenuItemBuilder::with_id(format!("set:{}::{v}", m.id), format!("{}%", v))
+                        .build(app)?,
                 );
             }
             sub = sub.separator();
             sub = sub.item(
-                &MenuItemBuilder::with_id(
-                    format!("up:{}", m.id),
-                    format!("+{:.0}%", STEP_PERCENT),
-                )
-                .build(app)?,
+                &MenuItemBuilder::with_id(format!("up:{}", m.id), format!("+{:.0}%", STEP_PERCENT))
+                    .build(app)?,
             );
             sub = sub.item(
                 &MenuItemBuilder::with_id(
@@ -100,17 +94,14 @@ fn build_menu(app: &AppHandle, state: &AppState) -> tauri::Result<Menu<tauri::Wr
         }
         builder = builder.separator();
         builder = builder.item(
-            &MenuItemBuilder::with_id("all-up", format!("All +{:.0}%", STEP_PERCENT))
-                .build(app)?,
+            &MenuItemBuilder::with_id("all-up", format!("All +{:.0}%", STEP_PERCENT)).build(app)?,
         );
         builder = builder.item(
             &MenuItemBuilder::with_id("all-down", format!("All -{:.0}%", STEP_PERCENT))
                 .build(app)?,
         );
-        builder = builder.item(
-            &MenuItemBuilder::with_id("toggle-night", "Toggle night mode")
-                .build(app)?,
-        );
+        builder = builder
+            .item(&MenuItemBuilder::with_id("toggle-night", "Toggle night mode").build(app)?);
     }
     // Profile picker — only when at least one profile exists.
     let profiles = state.profiles();
@@ -122,18 +113,15 @@ fn build_menu(app: &AppHandle, state: &AppState) -> tauri::Result<Menu<tauri::Wr
             } else {
                 p.name.clone()
             };
-            sub = sub.item(
-                &MenuItemBuilder::with_id(format!("profile:{}", p.id), label).build(app)?,
-            );
+            sub =
+                sub.item(&MenuItemBuilder::with_id(format!("profile:{}", p.id), label).build(app)?);
         }
         builder = builder.separator();
         builder = builder.item(&sub.build()?);
     }
 
     builder = builder.separator();
-    builder = builder.item(
-        &MenuItemBuilder::with_id("show", "Show window").build(app)?,
-    );
+    builder = builder.item(&MenuItemBuilder::with_id("show", "Show window").build(app)?);
     builder = builder.item(&PredefinedMenuItem::separator(app)?);
     builder = builder.item(&MenuItemBuilder::with_id("quit", "Quit").build(app)?);
 

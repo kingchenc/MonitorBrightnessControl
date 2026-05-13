@@ -56,14 +56,14 @@ fn compute_target(s: &crate::config::AutoDimSettings, now: DateTime<Utc>) -> f32
     if now < sunrise - half {
         night_b
     } else if now >= sunrise - half && now <= sunrise + half {
-        let progress = (now - (sunrise - half)).num_seconds() as f32
-            / (2.0 * half.num_seconds() as f32);
+        let progress =
+            (now - (sunrise - half)).num_seconds() as f32 / (2.0 * half.num_seconds() as f32);
         lerp(night_b, day_b, progress.clamp(0.0, 1.0))
     } else if now > sunrise + half && now < sunset - half {
         day_b
     } else if now >= sunset - half && now <= sunset + half {
-        let progress = (now - (sunset - half)).num_seconds() as f32
-            / (2.0 * half.num_seconds() as f32);
+        let progress =
+            (now - (sunset - half)).num_seconds() as f32 / (2.0 * half.num_seconds() as f32);
         lerp(day_b, night_b, progress.clamp(0.0, 1.0))
     } else {
         night_b

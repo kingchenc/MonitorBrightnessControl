@@ -39,10 +39,7 @@ fn list_json_returns_valid_array() {
 
 #[test]
 fn unknown_subcommand_fails() {
-    mbc()
-        .arg("not-a-real-subcommand")
-        .assert()
-        .failure();
+    mbc().arg("not-a-real-subcommand").assert().failure();
 }
 
 #[test]

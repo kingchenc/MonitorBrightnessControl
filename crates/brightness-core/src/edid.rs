@@ -128,9 +128,7 @@ mod tests {
     fn tolerates_padded_payload() {
         let mut e = synth();
         // Replace name with one terminated by 0x0A and padded by 0x20.
-        for i in 59..72 {
-            e[i] = 0x20;
-        }
+        e[59..72].fill(0x20);
         e[59..63].copy_from_slice(b"ACME");
         e[63] = 0x0A;
         let p = parse(&e).unwrap();

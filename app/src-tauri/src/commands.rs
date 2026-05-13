@@ -73,11 +73,7 @@ pub fn step_brightness(
 }
 
 #[tauri::command]
-pub fn get_vcp(
-    state: State<'_, Arc<AppState>>,
-    id: String,
-    code: u8,
-) -> Result<VcpView, String> {
+pub fn get_vcp(state: State<'_, Arc<AppState>>, id: String, code: u8) -> Result<VcpView, String> {
     let m = state.find(&id).ok_or_else(|| format!("no monitor {id}"))?;
     let v = m.get_vcp(code).map_err(|e| e.to_string())?;
     Ok(VcpView {
@@ -112,10 +108,7 @@ pub fn load_settings(state: State<'_, Arc<AppState>>) -> Settings {
 }
 
 #[tauri::command]
-pub fn save_settings(
-    state: State<'_, Arc<AppState>>,
-    settings: Settings,
-) -> Result<(), String> {
+pub fn save_settings(state: State<'_, Arc<AppState>>, settings: Settings) -> Result<(), String> {
     state
         .replace_settings(settings)
         .map_err(|e| format!("save settings: {e}"))

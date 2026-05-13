@@ -54,12 +54,7 @@ pub fn apply_profile(state: &Arc<AppState>, p: &Profile) {
     }
 }
 
-fn apply_override(
-    state: &Arc<AppState>,
-    m: &Monitor,
-    p: &Profile,
-    over: &ProfileMonitorSettings,
-) {
+fn apply_override(state: &Arc<AppState>, m: &Monitor, p: &Profile, over: &ProfileMonitorSettings) {
     let id = m.info().id.as_str();
     if let Some(pct) = over.brightness {
         let _ = state.set_brightness(Some(id), pct as f32);
@@ -68,11 +63,7 @@ fn apply_override(
         if let Ok(cur) = m.get_vcp(VCP_CONTRAST) {
             let abs = cur.percent_to_absolute(pct as f32);
             if let Err(e) = m.set_vcp(VCP_CONTRAST, abs) {
-                log::warn!(
-                    "apply profile {} → {} contrast: {e}",
-                    p.name,
-                    m.info().id
-                );
+                log::warn!("apply profile {} → {} contrast: {e}", p.name, m.info().id);
             }
         }
     }

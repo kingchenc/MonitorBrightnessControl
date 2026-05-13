@@ -132,24 +132,19 @@ impl PrivateFrameworks {
             let ds_get_raw: Symbol<unsafe extern "C" fn(CGDirectDisplayID, *mut f32) -> i32> =
                 display_services
                     .get(b"DisplayServicesGetBrightness\0")
-                    .map_err(|e| {
-                        Error::Platform(format!("DisplayServicesGetBrightness: {e}"))
-                    })?;
+                    .map_err(|e| Error::Platform(format!("DisplayServicesGetBrightness: {e}")))?;
             let ds_set_raw: Symbol<unsafe extern "C" fn(CGDirectDisplayID, f32) -> i32> =
                 display_services
                     .get(b"DisplayServicesSetBrightness\0")
-                    .map_err(|e| {
-                        Error::Platform(format!("DisplayServicesSetBrightness: {e}"))
-                    })?;
+                    .map_err(|e| Error::Platform(format!("DisplayServicesSetBrightness: {e}")))?;
 
             let core_display =
                 Library::new("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay")
                     .map_err(|e| Error::Platform(format!("dlopen CoreDisplay: {e}")))?;
-            let cd_set_raw: Option<
-                Symbol<unsafe extern "C" fn(CGDirectDisplayID, f64) -> i32>,
-            > = core_display
-                .get(b"CoreDisplay_Display_SetUserBrightness\0")
-                .ok();
+            let cd_set_raw: Option<Symbol<unsafe extern "C" fn(CGDirectDisplayID, f64) -> i32>> =
+                core_display
+                    .get(b"CoreDisplay_Display_SetUserBrightness\0")
+                    .ok();
 
             // Transmute lifetimes — they remain valid as long as the
             // corresponding `Library` is alive, which we keep next to the
@@ -404,7 +399,9 @@ impl MonitorHandle for InternalDisplay {
         ))
     }
     fn capabilities(&self) -> Result<Capabilities> {
-        Err(Error::Unsupported("internal panel has no capability string"))
+        Err(Error::Unsupported(
+            "internal panel has no capability string",
+        ))
     }
 }
 
@@ -452,7 +449,7 @@ impl ExternalDisplay {
         debug_assert!(frame.len() >= 2, "frame must include at least LEN byte");
         let chip = (DDC_ADDR as u32) << 1; // 0x6E
         let offset = frame[1] as u32; // the LEN byte serves as offset
-        // SAFETY: av is non-null; data pointer is valid for `len` bytes.
+                                      // SAFETY: av is non-null; data pointer is valid for `len` bytes.
         let kr = unsafe {
             IOAVServiceWriteI2C(
                 self.av.0,
@@ -473,13 +470,7 @@ impl ExternalDisplay {
         let chip = (DDC_ADDR as u32) << 1;
         // SAFETY: buf is owned and writable for expected_len bytes.
         let kr = unsafe {
-            IOAVServiceReadI2C(
-                self.av.0,
-                chip,
-                0,
-                buf.as_mut_ptr(),
-                expected_len as u32,
-            )
+            IOAVServiceReadI2C(self.av.0, chip, 0, buf.as_mut_ptr(), expected_len as u32)
         };
         if kr != KERN_SUCCESS {
             return Err(Error::Platform(format!("IOAVServiceReadI2C: kr={kr}")));

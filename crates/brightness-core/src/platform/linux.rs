@@ -170,7 +170,9 @@ impl MonitorHandle for BacklightDisplay {
         ))
     }
     fn capabilities(&self) -> Result<Capabilities> {
-        Err(Error::Unsupported("internal panel has no capability string"))
+        Err(Error::Unsupported(
+            "internal panel has no capability string",
+        ))
     }
 }
 
@@ -231,9 +233,7 @@ impl I2cDisplay {
             .ok()?;
         // SAFETY: ioctl(I2C_SLAVE, addr) sets a per-fd slave address; valid
         // for this fd until close.
-        let kr = unsafe {
-            libc::ioctl(f.as_raw_fd(), I2C_SLAVE as _, DDC_ADDR as libc::c_int)
-        };
+        let kr = unsafe { libc::ioctl(f.as_raw_fd(), I2C_SLAVE as _, DDC_ADDR as libc::c_int) };
         if kr < 0 {
             return None;
         }

@@ -40,7 +40,8 @@ use windows::Win32::Graphics::Gdi::{
 /// Defined in `<wingdi.h>` as `0x00000001`.
 const EDD_GET_DEVICE_INTERFACE_NAME: u32 = 0x0000_0001;
 use windows::Win32::System::Registry::{
-    RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_VALUE_TYPE,
+    RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ,
+    REG_VALUE_TYPE,
 };
 use wmi::{COMLibrary, WMIConnection};
 
@@ -227,12 +228,7 @@ fn enumerate_physical_monitors() -> Result<Vec<Monitor>> {
         hmonitors: Vec<(HMONITOR, String)>,
     }
 
-    extern "system" fn cb(
-        hmonitor: HMONITOR,
-        _hdc: HDC,
-        _rect: *mut RECT,
-        lparam: LPARAM,
-    ) -> BOOL {
+    extern "system" fn cb(hmonitor: HMONITOR, _hdc: HDC, _rect: *mut RECT, lparam: LPARAM) -> BOOL {
         // SAFETY: `lparam` is the `&mut EnumCtx` we passed in.
         let ctx = unsafe { &mut *(lparam.0 as *mut EnumCtx) };
         let mut info: MONITORINFOEXW = unsafe { std::mem::zeroed() };
@@ -418,15 +414,7 @@ fn read_registry_binary(root: HKEY, subkey: &str, value_name: &str) -> Option<Ve
     let value_w = HSTRING::from(value_name);
     let mut hkey: HKEY = HKEY::default();
     // SAFETY: subkey_w outlives the call; KEY_READ is a valid access.
-    let kr = unsafe {
-        RegOpenKeyExW(
-            root,
-            PCWSTR(subkey_w.as_ptr()),
-            0,
-            KEY_READ,
-            &mut hkey,
-        )
-    };
+    let kr = unsafe { RegOpenKeyExW(root, PCWSTR(subkey_w.as_ptr()), 0, KEY_READ, &mut hkey) };
     if kr.is_err() {
         return None;
     }
@@ -446,7 +434,9 @@ fn read_registry_binary(root: HKEY, subkey: &str, value_name: &str) -> Option<Ve
     };
     if len == 0 {
         // SAFETY: hkey was opened above.
-        unsafe { let _ = RegCloseKey(hkey); };
+        unsafe {
+            let _ = RegCloseKey(hkey);
+        };
         return None;
     }
     let mut buf = vec![0u8; len as usize];
@@ -462,7 +452,9 @@ fn read_registry_binary(root: HKEY, subkey: &str, value_name: &str) -> Option<Ve
         )
     };
     // SAFETY: hkey is open.
-    unsafe { let _ = RegCloseKey(hkey); };
+    unsafe {
+        let _ = RegCloseKey(hkey);
+    };
     if kr.is_err() {
         return None;
     }
@@ -551,21 +543,21 @@ impl WmiBacklight {
                 let conn = match WMIConnection::with_namespace_path(r"root\WMI", com) {
                     Ok(c) => c,
                     Err(e) => {
-                        let _ = probe_tx_clone
-                            .send(Err(Error::Platform(format!("WMI connect: {e}"))));
+                        let _ =
+                            probe_tx_clone.send(Err(Error::Platform(format!("WMI connect: {e}"))));
                         return;
                     }
                 };
-                let probe: std::result::Result<Vec<WmiMonitorBrightness>, _> =
-                    conn.raw_query("SELECT InstanceName, CurrentBrightness FROM WmiMonitorBrightness");
+                let probe: std::result::Result<Vec<WmiMonitorBrightness>, _> = conn
+                    .raw_query("SELECT InstanceName, CurrentBrightness FROM WmiMonitorBrightness");
                 match probe {
                     Ok(rows) if rows.is_empty() => {
                         let _ = probe_tx_clone.send(Ok(false));
                         return;
                     }
                     Err(e) => {
-                        let _ = probe_tx_clone
-                            .send(Err(Error::Platform(format!("WMI query: {e}"))));
+                        let _ =
+                            probe_tx_clone.send(Err(Error::Platform(format!("WMI query: {e}"))));
                         return;
                     }
                     Ok(_) => {}
@@ -696,6 +688,8 @@ impl MonitorHandle for WmiBacklight {
     }
 
     fn capabilities(&self) -> Result<Capabilities> {
-        Err(Error::Unsupported("internal panel has no capability string"))
+        Err(Error::Unsupported(
+            "internal panel has no capability string",
+        ))
     }
 }

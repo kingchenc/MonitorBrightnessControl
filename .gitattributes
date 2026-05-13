@@ -1,0 +1,37 @@
+# Force LF line endings on all text source files regardless of platform.
+# Without this, Windows checkouts convert LF -> CRLF via core.autocrlf,
+# which breaks `rustfmt --check` (newline_style = "Unix" in rustfmt.toml)
+# and causes spurious diffs when files travel between Windows and Linux
+# contributors.
+
+* text=auto eol=lf
+
+# Explicit lists for clarity / safety.
+*.rs    text eol=lf
+*.toml  text eol=lf
+*.json  text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# Windows-specific scripts keep their native line endings — PowerShell and
+# CMD tolerate either, but some Windows tooling prefers CRLF for .ps1/.bat.
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Binary assets — never touch.
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.icns  binary
+*.pfx   binary
+*.p12   binary
+*.msix  binary
+*.msi   binary
+*.exe   binary
