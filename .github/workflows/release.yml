@@ -19,8 +19,9 @@ jobs:
             target: x86_64-pc-windows-msvc
           - os: macos-14
             target: aarch64-apple-darwin
-          - os: macos-13
-            target: x86_64-apple-darwin
+          # macos-13 (Intel) was dropped — those runners are scarce on
+          # GitHub-hosted and frequently queue for hours. Intel Mac users
+          # can run the Apple Silicon build via Rosetta 2.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
