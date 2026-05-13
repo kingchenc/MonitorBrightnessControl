@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Hardened runtime: required for notarization. We grant just enough to
+      allow JIT in WebKit (Tauri's webview) and to load the private
+      DisplayServices and CoreDisplay frameworks via dlopen. We do NOT
+      claim the get-task-allow entitlement because that would block
+      notarization.
+    -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Tauri Webview2 / WKWebView needs network for IPC bridge -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!--
+      Allow user-selected file access for the rare case we open a config
+      file via a dialog; not currently used but reserves the entitlement
+      so a future feature does not require resigning.
+    -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+</dict>
+</plist>

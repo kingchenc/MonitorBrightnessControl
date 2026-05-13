@@ -1,0 +1,16 @@
+# udev rules for Monitor Brightness Control.
+#
+# Drop into /etc/udev/rules.d/90-monitor-brightness.rules and reload udev:
+#   sudo udevadm control --reload && sudo udevadm trigger
+#
+# Grants the active 'video' (laptop backlight) and 'i2c' (DDC/CI on
+# external monitors) groups write access to the relevant device nodes
+# without root.
+
+# Internal panel: /sys/class/backlight/<dev>/brightness
+ACTION=="add", SUBSYSTEM=="backlight", \
+    RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness", \
+    RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+
+# External monitors: /dev/i2c-* used for DDC/CI by brightness-core.
+KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"

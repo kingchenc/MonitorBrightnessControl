@@ -1,0 +1,61 @@
+[package]
+name = "brightness-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Cross-platform monitor brightness, contrast and DDC/CI control core."
+readme = "../../README.md"
+keywords = ["monitor", "brightness", "ddc", "ddc-ci", "display"]
+categories = ["hardware-support", "os"]
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+thiserror.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+once_cell.workspace = true
+bitflags.workspace = true
+serde = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Devices_Display",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Com",
+    "Win32_System_Registry",
+    "Win32_Storage_FileSystem",
+    "Win32_Security",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_HiDpi",
+] }
+windows-core = "0.58"
+wmi = "0.14"
+serde = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+core-graphics = "0.24"
+io-kit-sys = "0.4"
+mach2 = "0.4"
+libloading = "0.8"
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.29", features = ["fs", "ioctl"] }
+libc = "0.2"
+udev = "0.9"
+
+[dev-dependencies]
+serde_json.workspace = true

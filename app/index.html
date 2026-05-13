@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitor Brightness Control</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1 id="app-title">Monitor Brightness Control</h1>
+      <nav id="tab-nav"></nav>
+    </header>
+    <main>
+      <section id="tab-monitors" class="tab-panel active"></section>
+      <section id="tab-settings" class="tab-panel"></section>
+      <section id="tab-profiles" class="tab-panel"></section>
+      <section id="tab-about" class="tab-panel"></section>
+    </main>
+    <footer>
+      <span id="status">Ready</span>
+      <button id="refresh-btn" type="button">Refresh</button>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

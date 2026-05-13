@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capability set for the Monitor Brightness Control application UI.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-set-focus",
+    "core:event:default",
+    "core:tray:default",
+    "core:menu:default",
+    "core:webview:default",
+    "global-shortcut:default",
+    "autostart:default",
+    "os:default",
+    "shell:allow-open",
+    "dialog:default"
+  ]
+}

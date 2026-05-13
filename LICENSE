@@ -1,0 +1,63 @@
+Monitor Brightness Control — Proprietary License
+Copyright (c) 2026 kingchenc. All rights reserved.
+
+This software and its source code (the "Software") are made available by the
+copyright holder for personal reference and for running the unmodified binaries
+distributed by the copyright holder.
+
+1. PERMITTED USE
+
+   You MAY:
+     a. View the source code in this repository.
+     b. Run the official, unmodified binary distributions of the Software for
+        personal or internal-business use on hardware you own or control,
+        whether the use is personal or commercial in nature.
+     c. Submit bug reports, suggestions, or pull requests to the copyright
+        holder. By submitting a contribution, you retain your own copyright
+        in it but grant the copyright holder a perpetual, worldwide,
+        royalty-free, irrevocable, sublicensable license to use, reproduce,
+        modify, publish, and distribute the contribution as part of the
+        Software under this License or any future license the copyright
+        holder chooses for the Software.
+
+2. RESTRICTIONS
+
+   Without the prior written permission of the copyright holder you MAY NOT:
+     a. Modify, adapt, translate, port, fork or create derivative works of the
+        Software, in whole or in part.
+     b. Redistribute the Software, its source code, or any derivative work
+        thereof, in original or modified form, in source or binary form, by
+        any means or medium.
+     c. Sell, rent, lease, sublicense, or otherwise make the Software available
+        to third parties.
+     d. Reverse-engineer, decompile or disassemble the Software, except and
+        only to the extent that such activity is expressly permitted by
+        applicable law notwithstanding this restriction.
+     e. Remove or alter any copyright, trademark or other proprietary notice
+        contained in the Software.
+
+3. THIRD-PARTY COMPONENTS
+
+   The Software is built on top of third-party open-source libraries (Tauri,
+   the Rust ecosystem, etc.). Those components remain under their own original
+   licenses (typically MIT or Apache-2.0). This License governs only the
+   first-party code authored by the copyright holder.
+
+4. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+   OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+5. TERMINATION
+
+   Any violation of this License terminates your rights under it automatically
+   and immediately. On termination you must cease all use of the Software and
+   destroy every copy in your possession.
+
+For licensing inquiries beyond the permitted use above, contact the copyright
+holder.

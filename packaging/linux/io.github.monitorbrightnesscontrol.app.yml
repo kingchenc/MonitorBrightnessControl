@@ -1,0 +1,49 @@
+# Flatpak manifest for Monitor Brightness Control.
+#
+# Build:
+#   flatpak-builder --user --install --force-clean build-flatpak \
+#       packaging/linux/io.github.monitorbrightnesscontrol.app.yml
+#
+# Note: Flatpak sandboxing makes /dev/i2c-* hard to reach. We request
+# device-access for "all" and a host-talk for the system-bus only as a
+# best effort. For full DDC/CI support users should prefer the AppImage
+# or .deb on Linux.
+
+app-id: io.github.monitorbrightnesscontrol.app
+runtime: org.freedesktop.Platform
+runtime-version: "23.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node20
+command: monitor-brightness-control
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --device=all                # /dev/i2c-* — required for DDC/CI
+  - --filesystem=host-os        # /sys/class/backlight read access
+  - --filesystem=xdg-config/MonitorBrightnessControl
+  - --talk-name=org.freedesktop.login1
+
+modules:
+  - name: monitor-brightness-control
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
+      env:
+        CARGO_HOME: /run/build/monitor-brightness-control/cargo
+    build-commands:
+      - npm --prefix app ci --offline || npm --prefix app install
+      - npm --prefix app run build
+      - cargo build --release --manifest-path app/src-tauri/Cargo.toml
+      - install -Dm755 target/release/monitor-brightness-control /app/bin/monitor-brightness-control
+      - install -Dm644 packaging/linux/monitor-brightness-control.desktop
+            /app/share/applications/io.github.monitorbrightnesscontrol.app.desktop
+      - install -Dm644 app/src-tauri/icons/icon.png
+            /app/share/icons/hicolor/512x512/apps/io.github.monitorbrightnesscontrol.app.png
+    sources:
+      - type: dir
+        path: ../..

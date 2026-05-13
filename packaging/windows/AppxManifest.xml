@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for the Microsoft Store submission. The values marked
+  PLACEHOLDER must be replaced with the values from the Store
+  Partner Center "App identity" page before generating an .msix
+  package. See docs/STORE-SUBMISSION.md for the full procedure.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="PLACEHOLDER.MonitorBrightnessControl"
+    Publisher="CN=PLACEHOLDER, O=PLACEHOLDER, L=PLACEHOLDER, S=PLACEHOLDER, C=DE"
+    Version="0.1.0.0"
+    ProcessorArchitecture="x64"/>
+
+  <Properties>
+    <DisplayName>Monitor Brightness Control</DisplayName>
+    <PublisherDisplayName>PLACEHOLDER Publisher</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Fast cross-platform brightness, contrast and DDC/CI control for every connected monitor.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0"/>
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us"/>
+    <Resource Language="de-de"/>
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="monitor-brightness-control.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Monitor Brightness Control"
+        Description="Fast cross-platform brightness, contrast and DDC/CI control."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"/>
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#0C2040"/>
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!--
+      runFullTrust is required because we use the dxva2 Low-Level Monitor
+      Configuration API (SetVCPFeature etc.), which is unavailable to
+      sandboxed UWP apps. The Store's "Desktop Bridge" review pathway
+      handles this transparently for desktop applications.
+    -->
+    <rescap:Capability Name="runFullTrust"/>
+  </Capabilities>
+</Package>

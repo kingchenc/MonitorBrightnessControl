@@ -1,0 +1,64 @@
+[package]
+name = "monitor-brightness-control"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Cross-platform monitor brightness and DDC/CI control with tray, hotkeys, profiles and auto-dim."
+
+[lib]
+name = "monitor_brightness_control_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "monitor-brightness-control"
+path = "src/main.rs"
+
+[features]
+# `cargo tauri build` enables this automatically; for direct
+# `cargo build --release` invocations callers must pass
+# `--features custom-protocol` (see docs/BUILDING.md).
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { workspace = true, features = [] }
+
+[dependencies]
+tauri = { workspace = true, features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut.workspace = true
+tauri-plugin-single-instance.workspace = true
+tauri-plugin-autostart.workspace = true
+tauri-plugin-window-state.workspace = true
+tauri-plugin-os.workspace = true
+tauri-plugin-shell.workspace = true
+tauri-plugin-dialog.workspace = true
+brightness-core = { path = "../../crates/brightness-core", features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+once_cell.workspace = true
+log.workspace = true
+env_logger.workspace = true
+toml.workspace = true
+dirs.workspace = true
+chrono.workspace = true
+sunrise.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Accessibility",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+udev = "0.9"

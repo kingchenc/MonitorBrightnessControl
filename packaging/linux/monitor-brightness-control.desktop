@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Monitor Brightness Control
+GenericName=Brightness Control
+Comment=Cross-platform brightness, contrast and DDC/CI control for every monitor.
+Categories=Utility;Settings;HardwareSettings;
+Exec=monitor-brightness-control
+Icon=monitor-brightness-control
+Terminal=false
+StartupNotify=true
+StartupWMClass=monitor-brightness-control
+Keywords=brightness;monitor;ddc;contrast;color;display;

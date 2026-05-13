@@ -1,0 +1,67 @@
+# Rust
+/target
+**/target
+**/*.rs.bk
+Cargo.lock.bak
+*.profraw
+*.profdata
+lcov.info
+coverage/
+
+# Node / Frontend
+node_modules
+dist
+dist-ssr
+.vite
+*.local
+
+# Tauri
+app/src-tauri/target
+app/src-tauri/gen
+app/src-tauri/WixTools
+app/src-tauri/tauri.local.conf.json
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.sample
+.idea
+*.iml
+.history/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+
+# Build artifacts
+*.msix
+*.msixbundle
+*.appx
+*.appxupload
+*.appxsym
+*.msi
+*.exe
+*.pdb
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.flatpak
+*.snap
+
+# Secrets / signing
+*.pfx
+*.p12
+*.key
+*.cer
+.env
+.env.local
+
+# Logs
+*.log
+
+# Claude Code (local AI-assistant state — never commit)
+.claude/

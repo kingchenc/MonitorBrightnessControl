@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reserved resource catalog for future localized Store strings. -->
+<root>
+  <data name="AppDisplayName">
+    <value>Monitor Brightness Control</value>
+  </data>
+  <data name="AppDescription">
+    <value>Fast cross-platform brightness, contrast and DDC/CI control for every connected monitor.</value>
+  </data>
+</root>
