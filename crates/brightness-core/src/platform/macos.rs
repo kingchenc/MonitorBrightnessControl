@@ -364,7 +364,7 @@ impl MonitorHandle for InternalDisplay {
                 "DisplayServicesGetBrightness: kr={kr}"
             )));
         }
-        Ok((v.clamp(0.0, 1.0) * 100.0) as f32)
+        Ok(v.clamp(0.0, 1.0) * 100.0)
     }
 
     fn set_brightness_percent(&self, percent: f32) -> Result<()> {
