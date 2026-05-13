@@ -7,6 +7,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -48,17 +50,12 @@ jobs:
         working-directory: app
         run: npm ci
 
-      - name: Tauri build (signed)
+      # Build unsigned. We don't currently maintain Apple Developer or
+      # Authenticode certificates — installers carry SmartScreen / Gatekeeper
+      # warnings on first run. Once certificates are added as repository
+      # secrets, re-introduce a signed-build step gated on their presence.
+      - name: Tauri build
         working-directory: app/src-tauri
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: cargo tauri build --target ${{ matrix.target }}
 
       - name: Collect release artifacts
