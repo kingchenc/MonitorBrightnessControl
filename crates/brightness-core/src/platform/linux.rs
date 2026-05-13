@@ -273,7 +273,7 @@ impl I2cDisplay {
     fn rewind(&self) {
         // Some i2c-dev implementations expose a position cursor; resetting is
         // a defensive no-op for character devices.
-        if let Ok(mut fd) = self.fd.try_lock() {
+        if let Some(mut fd) = self.fd.try_lock() {
             let _ = fd.seek(SeekFrom::Start(0));
         }
     }

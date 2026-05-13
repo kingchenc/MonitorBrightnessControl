@@ -30,9 +30,7 @@ use std::sync::Arc;
 
 use core_foundation::base::{CFRelease, CFTypeRef, TCFType};
 use core_foundation::string::{CFString, CFStringRef};
-use core_graphics::display::{
-    kCGDirectMainDisplay, CGDisplay, CGDisplayIsBuiltin, CGGetActiveDisplayList,
-};
+use core_graphics::display::{CGDisplay, CGDisplayIsBuiltin, CGGetActiveDisplayList};
 use libloading::{Library, Symbol};
 use parking_lot::Mutex;
 
@@ -50,9 +48,13 @@ use crate::vcp::VcpValue;
 // ---------------------------------------------------------------------------
 
 type CGDirectDisplayID = u32;
+#[allow(non_camel_case_types)]
 type kern_return_t = i32;
+#[allow(non_camel_case_types)]
 type io_object_t = u32;
+#[allow(non_camel_case_types)]
 type io_iterator_t = io_object_t;
+#[allow(non_camel_case_types)]
 type io_service_t = io_object_t;
 type IOOptionBits = u32;
 
@@ -83,8 +85,8 @@ extern "C" {
     fn CFEqual(a: CFTypeRef, b: CFTypeRef) -> u8;
 }
 
-/// IOAVService is exposed by `CoreDisplay.framework`. The headers are not
-/// public; the symbols are stable (used by `m1ddc`, MonitorControl, etc.).
+// IOAVService is exposed by `CoreDisplay.framework`. The headers are not
+// public; the symbols are stable (used by `m1ddc`, MonitorControl, etc.).
 #[link(name = "CoreDisplay", kind = "framework")]
 extern "C" {
     fn IOAVServiceCreateWithService(allocator: CFTypeRef, service: io_service_t) -> CFTypeRef;
@@ -205,8 +207,6 @@ impl MonitorManager for Manager {
 }
 
 fn enumerate() -> Result<Vec<Monitor>> {
-    let _ = unsafe { kCGDirectMainDisplay }; // silence unused on some toolchains
-
     let display_ids = active_displays()?;
     let mut external_av = enumerate_external_av_services();
 
