@@ -371,4 +371,3 @@ fn enumerate_i2c_displays() -> Vec<I2cDisplay> {
     }
     out
 }
-
