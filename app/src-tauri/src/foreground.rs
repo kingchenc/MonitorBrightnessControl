@@ -99,7 +99,6 @@ mod macos_impl {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use core_foundation::base::TCFType;
     use core_foundation::string::CFString;
 
     use crate::state::AppState;
