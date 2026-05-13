@@ -21,7 +21,6 @@
 //!   subsystems; `Manager::invalidate_cache` is wired to the udev event loop
 //!   in the application layer.
 
-use std::ffi::CStr;
 use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::fd::AsRawFd;
@@ -373,7 +372,3 @@ fn enumerate_i2c_displays() -> Vec<I2cDisplay> {
     out
 }
 
-#[allow(dead_code)]
-fn _silence_unused() {
-    let _ = CStr::from_bytes_with_nul(b"\0");
-}
