@@ -74,6 +74,7 @@ pub fn run() {
             commands::restore_settings_backup,
             commands::admin_autostart_status,
             commands::set_admin_autostart,
+            commands::default_profile_templates,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

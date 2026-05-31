@@ -211,3 +211,59 @@ pub struct VcpView {
     pub current: u16,
     pub maximum: u16,
 }
+
+/// A monitor-agnostic starting point the UI can turn into a full profile by
+/// applying the values to each connected monitor. `color_preset` uses the
+/// same VCP 0x14 encoding the rest of the app exposes (1=sRGB, 2=Native,
+/// 4=5000K, 5=6500K, 6=7500K, 8=9300K, 11=User).
+#[derive(Serialize, Debug, Clone)]
+pub struct ProfileTemplate {
+    pub id: String,
+    pub name: String,
+    pub brightness: u8,
+    pub contrast: u8,
+    pub color_preset: u16,
+}
+
+/// Curated starting points for common usage scenarios. The frontend localizes
+/// the label by `id` and applies the values to every connected monitor.
+#[tauri::command]
+pub fn default_profile_templates() -> Vec<ProfileTemplate> {
+    vec![
+        ProfileTemplate {
+            id: "gaming".into(),
+            name: "Gaming".into(),
+            brightness: 100,
+            contrast: 75,
+            color_preset: 2, // Native — punchy, full gamut
+        },
+        ProfileTemplate {
+            id: "movie".into(),
+            name: "Movie / Video".into(),
+            brightness: 35,
+            contrast: 60,
+            color_preset: 4, // 5000K — warm, cinematic
+        },
+        ProfileTemplate {
+            id: "reading".into(),
+            name: "Reading / Night".into(),
+            brightness: 25,
+            contrast: 50,
+            color_preset: 4, // 5000K — easy on the eyes at night
+        },
+        ProfileTemplate {
+            id: "office".into(),
+            name: "Office / Productivity".into(),
+            brightness: 75,
+            contrast: 60,
+            color_preset: 5, // 6500K — neutral daylight
+        },
+        ProfileTemplate {
+            id: "photo".into(),
+            name: "Photo editing".into(),
+            brightness: 70,
+            contrast: 50,
+            color_preset: 1, // sRGB — calibrated reference
+        },
+    ]
+}

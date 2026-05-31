@@ -32,6 +32,14 @@ interface VcpView {
   maximum: number;
 }
 
+interface ProfileTemplate {
+  id: string;
+  name: string;
+  brightness: number;
+  contrast: number;
+  color_preset: number;
+}
+
 const VCP_CONTRAST = 0x12;
 const VCP_COLOR_PRESET = 0x14;
 
@@ -51,12 +59,18 @@ export async function renderProfiles(host: HTMLElement) {
   host.replaceChildren();
   let p: Profiles;
   let monitors: MonitorRow[] = [];
+  let templates: ProfileTemplate[] = [];
   try {
     p = await invoke<Profiles>("load_profiles");
     monitors = await invoke<MonitorRow[]>("list_monitors");
   } catch (e) {
     host.appendChild(el("p", { className: "error" }, [`${t("common.error")}: ${e}`]));
     return;
+  }
+  try {
+    templates = await invoke<ProfileTemplate[]>("default_profile_templates");
+  } catch (e) {
+    console.warn("default_profile_templates failed", e);
   }
   // Migrate legacy `brightness` map into the new `monitors` block so the UI
   // can present everything uniformly.
@@ -73,16 +87,47 @@ export async function renderProfiles(host: HTMLElement) {
       profile.brightness = {};
     }
   }
-  paint(host, p, monitors);
+  paint(host, p, monitors, templates);
 }
 
-function paint(host: HTMLElement, p: Profiles, monitors: MonitorRow[]) {
+function templateLabel(tpl: ProfileTemplate): string {
+  const key = `profiles.template.${tpl.id}`;
+  const localized = t(key);
+  // t() returns the key itself when missing — fall back to the backend name.
+  return localized === key ? tpl.name : localized;
+}
+
+function profileFromTemplate(tpl: ProfileTemplate, monitors: MonitorRow[]): Profile {
+  const fresh: Profile = {
+    id: cryptoRandomId(),
+    name: templateLabel(tpl),
+    app_id: "",
+    monitors: {},
+    brightness: {},
+  };
+  for (const m of monitors) {
+    fresh.monitors[m.id] = {
+      brightness: tpl.brightness,
+      // Contrast and color preset only apply to external DDC/CI monitors.
+      contrast: m.kind === "external" ? tpl.contrast : null,
+      color_preset: m.kind === "external" ? tpl.color_preset : null,
+    };
+  }
+  return fresh;
+}
+
+function paint(
+  host: HTMLElement,
+  p: Profiles,
+  monitors: MonitorRow[],
+  templates: ProfileTemplate[],
+) {
   host.replaceChildren();
   host.appendChild(el("p", { className: "muted" }, [t("profiles.intro")]));
 
   const list = el("div", { className: "profile-list" });
   for (const profile of p.items) {
-    list.appendChild(profileCard(profile, p, monitors, host));
+    list.appendChild(profileCard(profile, p, monitors, host, templates));
   }
   host.appendChild(list);
 
@@ -101,9 +146,31 @@ function paint(host: HTMLElement, p: Profiles, monitors: MonitorRow[]) {
       fresh.monitors[m.id] = await snapshotMonitor(m);
     }
     p.items.push(fresh);
-    paint(host, p, monitors);
+    paint(host, p, monitors, templates);
   });
-  host.appendChild(addBtn);
+
+  // "Add from template" picker.
+  if (templates.length > 0) {
+    const bar = el("div", { className: "template-bar" });
+    const select = el("select", {}) as HTMLSelectElement;
+    for (const tpl of templates) {
+      select.appendChild(el("option", { value: tpl.id }, [templateLabel(tpl)]));
+    }
+    const tplBtn = el("button", { type: "button" }, [t("profiles.templates")]);
+    tplBtn.addEventListener("click", () => {
+      const tpl = templates.find((x) => x.id === select.value);
+      if (!tpl) return;
+      p.items.push(profileFromTemplate(tpl, monitors));
+      setStatus(t("status.profile.template_added"));
+      paint(host, p, monitors, templates);
+    });
+    bar.appendChild(select);
+    bar.appendChild(tplBtn);
+    bar.appendChild(addBtn);
+    host.appendChild(bar);
+  } else {
+    host.appendChild(addBtn);
+  }
 
   const saveBtn = el("button", { type: "button", className: "primary" }, [t("profiles.save")]);
   saveBtn.addEventListener("click", async () => {
@@ -147,6 +214,7 @@ function profileCard(
   all: Profiles,
   monitors: MonitorRow[],
   host: HTMLElement,
+  templates: ProfileTemplate[],
 ): HTMLElement {
   const card = el("article", { className: "card" });
   card.appendChild(el("h3", {}, [profile.name || t("profiles.unnamed")]));
@@ -193,14 +261,14 @@ function profileCard(
     for (const m of monitors) {
       profile.monitors[m.id] = await snapshotMonitor(m);
     }
-    paint(host, all, monitors);
+    paint(host, all, monitors, templates);
   });
   card.appendChild(reloadBtn);
 
   const del = el("button", { type: "button", className: "danger" }, [t("profiles.delete")]);
   del.addEventListener("click", () => {
     all.items = all.items.filter((p) => p.id !== profile.id);
-    paint(host, all, monitors);
+    paint(host, all, monitors, templates);
   });
   card.appendChild(del);
 
