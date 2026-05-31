@@ -151,10 +151,26 @@ async function buildStartupForm(_s: Settings): Promise<HTMLElement> {
 
   // --- Normal login-item autostart ---
   const row = el("div", { className: "row" });
-  row.appendChild(el("label", {}, [t("settings.startup.launch")]));
+  const normalLabel = el("label", {}, [t("settings.startup.launch")]);
+  row.appendChild(normalLabel);
   const cb = el("input", { type: "checkbox", checked: normalEnabled }) as HTMLInputElement;
+  // Hint shown while the elevated task overrides the login item.
+  const overrideHint = el("p", { className: "muted small" }, [
+    t("settings.startup.overridden"),
+  ]);
+  overrideHint.style.display = "none";
   // Will be assigned below once the admin checkbox exists.
   let adminCb: HTMLInputElement | null = null;
+
+  // Reflect the override: while the elevated task is active the login-item
+  // option is fully disabled (unchecked + greyed) because it is superseded.
+  const applyOverride = (adminOn: boolean) => {
+    cb.disabled = adminOn;
+    normalLabel.classList.toggle("disabled", adminOn);
+    overrideHint.style.display = adminOn ? "" : "none";
+    if (adminOn) cb.checked = false;
+  };
+
   cb.addEventListener("change", async () => {
     try {
       if (cb.checked) {
@@ -163,6 +179,7 @@ async function buildStartupForm(_s: Settings): Promise<HTMLElement> {
         if (isWindows && adminCb && adminCb.checked) {
           await invoke("set_admin_autostart", { enabled: false });
           adminCb.checked = false;
+          applyOverride(false);
         }
       } else {
         await disable();
@@ -176,6 +193,7 @@ async function buildStartupForm(_s: Settings): Promise<HTMLElement> {
   });
   row.appendChild(cb);
   card.appendChild(row);
+  card.appendChild(overrideHint);
 
   // --- Elevated Task Scheduler autostart (Windows only) ---
   if (isWindows) {
@@ -192,21 +210,26 @@ async function buildStartupForm(_s: Settings): Promise<HTMLElement> {
         const now = await invoke<boolean>("set_admin_autostart", { enabled: want });
         localAdminCb.checked = now;
         if (now) {
-          // Disable the non-elevated login item to avoid a double launch.
+          // The elevated task fully overrides the login item: remove the
+          // non-elevated entry and lock its checkbox so the two can never be
+          // active at once (avoids a double launch).
           try {
             if (await isEnabled()) await disable();
           } catch {
             /* ignore */
           }
-          cb.checked = false;
+          applyOverride(true);
           setStatus(t("status.startup.admin_enabled"));
         } else {
+          applyOverride(false);
           setStatus(t("status.startup.admin_disabled"));
         }
       } catch (e) {
         // Revert the checkbox to the real state (UAC cancelled, etc.).
         try {
-          localAdminCb.checked = await invoke<boolean>("admin_autostart_status");
+          const real = await invoke<boolean>("admin_autostart_status");
+          localAdminCb.checked = real;
+          applyOverride(real);
         } catch {
           localAdminCb.checked = !want;
         }
@@ -216,6 +239,9 @@ async function buildStartupForm(_s: Settings): Promise<HTMLElement> {
     adminRow.appendChild(localAdminCb);
     card.appendChild(adminRow);
   }
+
+  // Apply the initial override state once both checkboxes exist.
+  applyOverride(adminEnabled);
 
   return card;
 }

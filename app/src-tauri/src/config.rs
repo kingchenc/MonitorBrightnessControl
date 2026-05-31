@@ -361,6 +361,30 @@ fn create_backup_from(source: &std::path::Path) -> std::io::Result<BackupInfo> {
     })
 }
 
+/// Ensure at least one backup exists. Called once at program start so the
+/// user's original configuration is always preserved — even before the first
+/// manual save and regardless of the `backup.enabled` toggle. No-op if a
+/// backup already exists.
+pub fn ensure_initial_backup() {
+    if !list_backups().is_empty() {
+        return;
+    }
+    let path = settings_path();
+    if !path.exists() {
+        // Persist the current (default or loaded) settings so there is a file
+        // to snapshot. save_settings won't itself back up here because the
+        // file does not exist yet.
+        if let Err(e) = save_settings(&load_settings()) {
+            log::warn!("initial settings write failed: {e}");
+            return;
+        }
+    }
+    match create_backup_from(&settings_path()) {
+        Ok(info) => log::info!("created initial settings backup {}", info.file_name),
+        Err(e) => log::warn!("initial backup failed: {e}"),
+    }
+}
+
 /// Take a backup of the current settings on demand. Returns the new entry.
 pub fn backup_now() -> std::io::Result<BackupInfo> {
     let path = settings_path();

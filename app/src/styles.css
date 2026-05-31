@@ -311,6 +311,15 @@ footer {
   margin: 8px 0;
 }
 
+label.disabled {
+  opacity: 0.5;
+}
+
+input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .profile-monitor .attr-row {
   grid-template-columns: 200px 1fr;
 }

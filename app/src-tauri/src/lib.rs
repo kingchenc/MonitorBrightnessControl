@@ -79,6 +79,11 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
             let state = app_state_for_setup;
+
+            // Ensure the user's original configuration is snapshotted at least
+            // once, right at startup, before anything can modify it.
+            config::ensure_initial_backup();
+
             tray::install(&handle, state.clone())?;
             hotkeys::install(&handle, state.clone())?;
             auto_dim::install(handle.clone(), state.clone());
