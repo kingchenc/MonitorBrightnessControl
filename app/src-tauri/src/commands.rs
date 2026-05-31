@@ -166,7 +166,8 @@ pub fn restore_settings_backup(
     state: State<'_, Arc<AppState>>,
     file_name: String,
 ) -> Result<Settings, String> {
-    let restored = config::restore_backup(&file_name).map_err(|e| format!("restore failed: {e}"))?;
+    let restored =
+        config::restore_backup(&file_name).map_err(|e| format!("restore failed: {e}"))?;
     state.reload_settings(restored.clone());
     tray::rebuild_menu(&app, state.inner());
     Ok(restored)

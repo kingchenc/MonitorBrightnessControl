@@ -63,14 +63,15 @@ fn create_task() -> Result<(), String> {
     let dir = std::env::temp_dir();
     let xml_path = dir.join(format!("{TASK_NAME}.xml"));
     {
-        let mut f = std::fs::File::create(&xml_path)
-            .map_err(|e| format!("create task xml: {e}"))?;
+        let mut f =
+            std::fs::File::create(&xml_path).map_err(|e| format!("create task xml: {e}"))?;
         let mut bytes = Vec::with_capacity(xml.len() * 2 + 2);
         bytes.extend_from_slice(&[0xFF, 0xFE]); // UTF-16LE BOM
         for unit in xml.encode_utf16() {
             bytes.extend_from_slice(&unit.to_le_bytes());
         }
-        f.write_all(&bytes).map_err(|e| format!("write task xml: {e}"))?;
+        f.write_all(&bytes)
+            .map_err(|e| format!("write task xml: {e}"))?;
     }
 
     let params = format!(
@@ -166,15 +167,11 @@ fn xml_escape(s: &str) -> String {
 /// the UAC cancel which surfaces as an `ShellExecuteEx` failure) is reported.
 #[cfg(windows)]
 fn run_elevated(program: &str, params: &str) -> Result<u32, String> {
-    use windows::core::{w, HSTRING, PCWSTR};
     use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
-    use windows::Win32::System::Threading::{
-        GetExitCodeProcess, WaitForSingleObject, INFINITE,
-    };
-    use windows::Win32::UI::Shell::{
-        ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
-    };
+    use windows::Win32::System::Threading::{GetExitCodeProcess, INFINITE, WaitForSingleObject};
+    use windows::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
     use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+    use windows::core::{HSTRING, PCWSTR, w};
 
     let program_w = HSTRING::from(program);
     let params_w = HSTRING::from(params);
