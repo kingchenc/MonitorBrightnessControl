@@ -282,6 +282,35 @@ footer {
   background: var(--bg);
 }
 
+.backup-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.backup-item {
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.backup-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.template-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
 .profile-monitor .attr-row {
   grid-template-columns: 200px 1fr;
 }

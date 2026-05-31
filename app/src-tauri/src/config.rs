@@ -34,6 +34,9 @@ pub struct Settings {
     /// system's local timezone every minute.
     pub schedules: ScheduleSettings,
 
+    /// Rolling backups of `settings.toml`.
+    pub backup: BackupSettings,
+
     /// UI language. `"auto"` = follow OS locale, otherwise an ISO 639-1
     /// code like `"en"`, `"de"`, `"es"`, `"fr"`, `"it"`, `"ja"`.
     pub language: String,
@@ -49,9 +52,44 @@ impl Default for Settings {
             sync_primary_id: None,
             sync_offsets: Default::default(),
             schedules: ScheduleSettings::default(),
+            backup: BackupSettings::default(),
             language: "auto".into(),
         }
     }
+}
+
+/// Configuration for the rolling backup of `settings.toml`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BackupSettings {
+    /// When enabled, every `save_settings` snapshots the previous on-disk
+    /// `settings.toml` into the `backups/` folder before overwriting it.
+    pub enabled: bool,
+    /// Number of newest backups to keep. Older ones are pruned on every save
+    /// and on every explicit "back up now". Clamped to at least 1.
+    pub retention: u32,
+}
+
+impl Default for BackupSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            retention: 10,
+        }
+    }
+}
+
+/// Metadata about a single backup file, returned to the frontend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupInfo {
+    /// Base file name within the backups directory, e.g.
+    /// `settings-1717000000000.toml`. Never contains a path separator.
+    pub file_name: String,
+    /// Creation time in Unix milliseconds, parsed from the file name (falls
+    /// back to the filesystem mtime if the name is unexpected).
+    pub created_unix_ms: u64,
+    /// File size in bytes.
+    pub size_bytes: u64,
 }
 
 /// Container for time-of-day brightness rules.
@@ -240,13 +278,183 @@ pub fn load_settings() -> Settings {
 pub fn save_settings(s: &Settings) -> std::io::Result<()> {
     let dir = config_dir();
     fs::create_dir_all(&dir)?;
+
+    // Snapshot the previous on-disk settings before we overwrite them. We do
+    // this when backups are enabled, or unconditionally when no backup exists
+    // yet (so the very first save preserves the original configuration).
+    let path = settings_path();
+    if path.exists() {
+        let want_backup = s.backup.enabled || list_backups().is_empty();
+        if want_backup {
+            if let Err(e) = create_backup_from(&path) {
+                log::warn!("settings backup failed: {e}");
+            }
+            prune_backups(s.backup.retention);
+        }
+    }
+
     let raw = toml::to_string_pretty(s).map_err(|e| {
         std::io::Error::new(std::io::ErrorKind::InvalidData, format!("toml encode: {e}"))
     })?;
-    let tmp = settings_path().with_extension("toml.tmp");
+    let tmp = path.with_extension("toml.tmp");
     fs::write(&tmp, raw)?;
-    fs::rename(&tmp, settings_path())?;
+    fs::rename(&tmp, &path)?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Settings backups
+// ---------------------------------------------------------------------------
+
+fn backups_dir() -> PathBuf {
+    config_dir().join("backups")
+}
+
+fn unix_millis_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Validate that `file_name` is a plain backup file name with no path
+/// components, matching `settings-<digits>.toml`. Prevents path traversal in
+/// restore/delete commands.
+fn is_valid_backup_name(file_name: &str) -> bool {
+    if file_name.contains('/') || file_name.contains('\\') || file_name.contains("..") {
+        return false;
+    }
+    match file_name
+        .strip_prefix("settings-")
+        .and_then(|r| r.strip_suffix(".toml"))
+    {
+        Some(stamp) => !stamp.is_empty() && stamp.bytes().all(|b| b.is_ascii_digit()),
+        None => false,
+    }
+}
+
+fn parse_stamp(file_name: &str) -> Option<u64> {
+    file_name
+        .strip_prefix("settings-")
+        .and_then(|r| r.strip_suffix(".toml"))
+        .and_then(|s| s.parse::<u64>().ok())
+}
+
+/// Copy `source` into the backups directory under a timestamped name.
+fn create_backup_from(source: &std::path::Path) -> std::io::Result<BackupInfo> {
+    let dir = backups_dir();
+    fs::create_dir_all(&dir)?;
+    let mut stamp = unix_millis_now();
+    let mut file_name = format!("settings-{stamp}.toml");
+    // Avoid colliding with an existing backup taken in the same millisecond.
+    while dir.join(&file_name).exists() {
+        stamp += 1;
+        file_name = format!("settings-{stamp}.toml");
+    }
+    let dest = dir.join(&file_name);
+    fs::copy(source, &dest)?;
+    let size_bytes = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
+    Ok(BackupInfo {
+        file_name,
+        created_unix_ms: stamp,
+        size_bytes,
+    })
+}
+
+/// Take a backup of the current settings on demand. Returns the new entry.
+pub fn backup_now() -> std::io::Result<BackupInfo> {
+    let path = settings_path();
+    if !path.exists() {
+        // Nothing saved yet — persist defaults first so there is something to
+        // snapshot, then back that up.
+        save_settings(&load_settings())?;
+    }
+    let info = create_backup_from(&settings_path())?;
+    // Respect retention even for manual backups.
+    let retention = load_settings().backup.retention;
+    prune_backups(retention);
+    Ok(info)
+}
+
+/// List existing backups, newest first.
+pub fn list_backups() -> Vec<BackupInfo> {
+    let dir = backups_dir();
+    let mut out = Vec::new();
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return out,
+    };
+    for entry in entries.flatten() {
+        let name = match entry.file_name().into_string() {
+            Ok(n) => n,
+            Err(_) => continue,
+        };
+        if !is_valid_backup_name(&name) {
+            continue;
+        }
+        let meta = entry.metadata().ok();
+        let size_bytes = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let created_unix_ms = parse_stamp(&name).unwrap_or(0);
+        out.push(BackupInfo {
+            file_name: name,
+            created_unix_ms,
+            size_bytes,
+        });
+    }
+    out.sort_by(|a, b| b.created_unix_ms.cmp(&a.created_unix_ms));
+    out
+}
+
+/// Delete the oldest backups so that at most `retention` remain.
+pub fn prune_backups(retention: u32) {
+    let keep = retention.max(1) as usize;
+    let backups = list_backups(); // newest first
+    if backups.len() <= keep {
+        return;
+    }
+    let dir = backups_dir();
+    for old in &backups[keep..] {
+        let p = dir.join(&old.file_name);
+        if let Err(e) = fs::remove_file(&p) {
+            log::warn!("pruning backup {}: {e}", old.file_name);
+        }
+    }
+}
+
+/// Delete a single backup by file name. Rejects names that are not plain
+/// backup files.
+pub fn delete_backup(file_name: &str) -> std::io::Result<()> {
+    if !is_valid_backup_name(file_name) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "invalid backup name",
+        ));
+    }
+    fs::remove_file(backups_dir().join(file_name))
+}
+
+/// Restore a backup: parse it, make a safety backup of the current settings,
+/// then write the restored settings as the active configuration. Returns the
+/// restored [`Settings`].
+pub fn restore_backup(file_name: &str) -> std::io::Result<Settings> {
+    if !is_valid_backup_name(file_name) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "invalid backup name",
+        ));
+    }
+    let src = backups_dir().join(file_name);
+    let raw = fs::read_to_string(&src)?;
+    let restored: Settings = toml::from_str(&raw).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("backup parse error: {e}"),
+        )
+    })?;
+    // save_settings will snapshot the current file before overwriting, so the
+    // pre-restore state is itself recoverable.
+    save_settings(&restored)?;
+    Ok(restored)
 }
 
 pub fn load_profiles() -> Profiles {

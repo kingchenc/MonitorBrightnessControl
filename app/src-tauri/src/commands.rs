@@ -6,7 +6,7 @@ use brightness_core::Capabilities;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
-use crate::config::{Profiles, Settings};
+use crate::config::{self, BackupInfo, Profiles, Settings};
 use crate::state::{AppState, MonitorRow};
 use crate::tray;
 
@@ -139,6 +139,37 @@ pub fn set_auto_dim(state: State<'_, Arc<AppState>>, enabled: bool) -> Result<()
     state
         .replace_settings(s)
         .map_err(|e| format!("save settings: {e}"))
+}
+
+// --- Settings backups -------------------------------------------------------
+
+#[tauri::command]
+pub fn backup_settings_now() -> Result<BackupInfo, String> {
+    config::backup_now().map_err(|e| format!("backup failed: {e}"))
+}
+
+#[tauri::command]
+pub fn list_settings_backups() -> Vec<BackupInfo> {
+    config::list_backups()
+}
+
+#[tauri::command]
+pub fn delete_settings_backup(file_name: String) -> Result<(), String> {
+    config::delete_backup(&file_name).map_err(|e| format!("delete failed: {e}"))
+}
+
+/// Restore a backup and refresh the in-memory settings + tray so the change
+/// takes effect without a restart. Returns the restored settings to the UI.
+#[tauri::command]
+pub fn restore_settings_backup(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    file_name: String,
+) -> Result<Settings, String> {
+    let restored = config::restore_backup(&file_name).map_err(|e| format!("restore failed: {e}"))?;
+    state.reload_settings(restored.clone());
+    tray::rebuild_menu(&app, state.inner());
+    Ok(restored)
 }
 
 #[tauri::command]

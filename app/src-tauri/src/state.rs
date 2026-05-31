@@ -122,6 +122,13 @@ impl AppState {
         Ok(())
     }
 
+    /// Update the in-memory settings without writing to disk. Used after a
+    /// backup restore, where `config::restore_backup` has already persisted
+    /// the file (re-saving here would create a redundant backup).
+    pub fn reload_settings(&self, s: Settings) {
+        *self.settings.write() = s;
+    }
+
     pub fn profiles(&self) -> Profiles {
         self.profiles.read().clone()
     }

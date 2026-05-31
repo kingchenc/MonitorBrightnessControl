@@ -44,6 +44,17 @@ interface MonitorRow {
   percent: number | null;
 }
 
+interface BackupSettings {
+  enabled: boolean;
+  retention: number;
+}
+
+interface BackupInfo {
+  file_name: string;
+  created_unix_ms: number;
+  size_bytes: number;
+}
+
 interface Settings {
   initial_brightness: Record<string, number>;
   hotkeys: HotkeySettings;
@@ -52,6 +63,7 @@ interface Settings {
   sync_primary_id: string | null;
   sync_offsets: Record<string, number>;
   schedules: ScheduleSettings;
+  backup: BackupSettings;
   language: string;
 }
 
@@ -77,6 +89,7 @@ export async function renderSettings(
   if (!s.language) s.language = "auto";
   if (!s.schedules) s.schedules = { enabled: false, items: [] };
   if (!Array.isArray(s.schedules.items)) s.schedules.items = [];
+  if (!s.backup) s.backup = { enabled: true, retention: 10 };
 
   let monitors: MonitorRow[] = [];
   try {
@@ -91,6 +104,7 @@ export async function renderSettings(
   host.appendChild(buildAutoDimForm(s));
   host.appendChild(buildSchedulesForm(s, monitors));
   host.appendChild(buildSyncForm(s));
+  host.appendChild(await buildBackupForm(s, host, onLanguageChange));
 
   const saveBtn = el("button", { type: "button", className: "primary" }, [
     t("settings.save"),
@@ -505,6 +519,112 @@ function scheduleRow(
   wrap.appendChild(monRow);
 
   return wrap;
+}
+
+async function buildBackupForm(
+  s: Settings,
+  host: HTMLElement,
+  onLanguageChange: () => void,
+): Promise<HTMLElement> {
+  const card = el("article", { className: "card" });
+  card.appendChild(el("h2", {}, [t("settings.backup")]));
+  card.appendChild(el("p", { className: "muted" }, [t("settings.backup.desc")]));
+
+  card.appendChild(
+    boolRow(t("settings.backup.enabled"), s.backup.enabled, (v) => {
+      s.backup.enabled = v;
+    }),
+  );
+  card.appendChild(
+    numberRow(t("settings.backup.retention"), s.backup.retention, 1, 100, (v) => {
+      s.backup.retention = Math.max(1, Math.round(v));
+    }),
+  );
+
+  const actions = el("div", { className: "row" });
+  const nowBtn = el("button", { type: "button" }, [t("settings.backup.now")]);
+  nowBtn.addEventListener("click", async () => {
+    try {
+      await invoke<BackupInfo>("backup_settings_now");
+      setStatus(t("status.backup.created"));
+      renderSettings(host, onLanguageChange);
+    } catch (e) {
+      setStatus(`${t("common.error")}: ${e}`);
+    }
+  });
+  actions.appendChild(nowBtn);
+  card.appendChild(actions);
+
+  // Existing backups list.
+  let backups: BackupInfo[] = [];
+  try {
+    backups = await invoke<BackupInfo[]>("list_settings_backups");
+  } catch (e) {
+    console.warn("list_settings_backups failed", e);
+  }
+
+  const heading = el("div", { className: "row" });
+  heading.appendChild(el("label", {}, [t("settings.backup.list")]));
+  heading.appendChild(
+    el("span", { className: "muted small" }, [
+      `${backups.length} ${t("settings.backup.count")}`,
+    ]),
+  );
+  card.appendChild(heading);
+
+  if (backups.length === 0) {
+    card.appendChild(el("p", { className: "muted small" }, [t("settings.backup.none")]));
+    return card;
+  }
+
+  const list = el("div", { className: "backup-list" });
+  for (const b of backups) {
+    list.appendChild(backupRow(b, host, onLanguageChange));
+  }
+  card.appendChild(list);
+  return card;
+}
+
+function backupRow(
+  b: BackupInfo,
+  host: HTMLElement,
+  onLanguageChange: () => void,
+): HTMLElement {
+  const row = el("div", { className: "row backup-item" });
+  const when = b.created_unix_ms > 0 ? new Date(b.created_unix_ms).toLocaleString() : b.file_name;
+  const sizeKb = (b.size_bytes / 1024).toFixed(1);
+  row.appendChild(el("span", {}, [`${when}`]));
+  row.appendChild(el("span", { className: "muted small" }, [`${sizeKb} KB`]));
+
+  const btns = el("div", { className: "backup-actions" });
+  const restore = el("button", { type: "button" }, [t("settings.backup.restore")]);
+  restore.addEventListener("click", async () => {
+    try {
+      await invoke<Settings>("restore_settings_backup", { fileName: b.file_name });
+      setStatus(t("status.backup.restored"));
+      // Reload the whole settings view and chrome from the restored state.
+      onLanguageChange();
+      renderSettings(host, onLanguageChange);
+    } catch (e) {
+      setStatus(`${t("common.error")}: ${e}`);
+    }
+  });
+  const del = el("button", { type: "button", className: "danger" }, [
+    t("settings.backup.delete"),
+  ]);
+  del.addEventListener("click", async () => {
+    try {
+      await invoke("delete_settings_backup", { fileName: b.file_name });
+      setStatus(t("status.backup.deleted"));
+      renderSettings(host, onLanguageChange);
+    } catch (e) {
+      setStatus(`${t("common.error")}: ${e}`);
+    }
+  });
+  btns.appendChild(restore);
+  btns.appendChild(del);
+  row.appendChild(btns);
+  return row;
 }
 
 function cryptoRandomId(): string {

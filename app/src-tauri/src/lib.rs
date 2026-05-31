@@ -67,6 +67,10 @@ pub fn run() {
             commands::set_auto_dim,
             commands::trigger_refresh,
             commands::quit_app,
+            commands::backup_settings_now,
+            commands::list_settings_backups,
+            commands::delete_settings_backup,
+            commands::restore_settings_backup,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
