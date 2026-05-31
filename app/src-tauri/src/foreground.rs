@@ -44,10 +44,20 @@ mod windows_impl {
         std::thread::Builder::new()
             .name("fg-watcher".into())
             .spawn(move || {
+                let self_name = self_exe_name();
                 let mut last = String::new();
                 loop {
                     if let Some(name) = current_exe_name() {
-                        if name != last {
+                        // Never treat focusing our own window as an app switch.
+                        // Otherwise opening the control panel would count as
+                        // "focused a non-profiled app" and reset every monitor
+                        // to its default brightness, undoing the active profile
+                        // and making the user's last change look like it didn't
+                        // take.
+                        let is_self = self_name
+                            .as_deref()
+                            .is_some_and(|s| name.eq_ignore_ascii_case(s));
+                        if !is_self && name != last {
                             last = name.clone();
                             crate::profiles::apply_profile_for_app(&state, &name);
                         }
@@ -56,6 +66,14 @@ mod windows_impl {
                 }
             })
             .ok();
+    }
+
+    /// File name of our own executable, used to skip self-focus events.
+    fn self_exe_name() -> Option<String> {
+        std::env::current_exe()
+            .ok()?
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
     }
 
     fn current_exe_name() -> Option<String> {
@@ -148,10 +166,16 @@ mod linux_impl {
         std::thread::Builder::new()
             .name("fg-watcher".into())
             .spawn(move || {
+                let self_class = self_exe_name();
                 let mut last = String::new();
                 loop {
                     if let Some(class) = active_window_class() {
-                        if class != last {
+                        // Skip our own window so opening the control panel does
+                        // not reset every monitor to its default brightness.
+                        let is_self = self_class
+                            .as_deref()
+                            .is_some_and(|s| class.eq_ignore_ascii_case(s));
+                        if !is_self && class != last {
                             last = class.clone();
                             crate::profiles::apply_profile_for_app(&state, &class);
                         }
@@ -160,6 +184,16 @@ mod linux_impl {
                 }
             })
             .ok();
+    }
+
+    /// File name of our own executable. On Linux the X11 `WM_CLASS` of a Tauri
+    /// window typically matches the binary name, so this lets us skip
+    /// self-focus events the same way as on Windows.
+    fn self_exe_name() -> Option<String> {
+        std::env::current_exe()
+            .ok()?
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
     }
 
     /// Read `_NET_ACTIVE_WINDOW` and the window's `WM_CLASS` via xprop, if

@@ -108,6 +108,22 @@ async function main() {
   // Monitors tab is preserved across the re-render.
   function autoRerenderMonitors() {
     if (activeTab() !== "monitors") return;
+    // Don't blow away the DOM while the user is actively using a control in
+    // this tab. A background scan landing mid-interaction would destroy the
+    // slider or <select> under the cursor and the user's action would be lost,
+    // forcing them to do it a second time. Their own input is the source of
+    // truth, so skipping this refresh is safe — the next scan re-syncs once
+    // they've moved on.
+    const panel = document.getElementById("tab-monitors");
+    const active = document.activeElement as HTMLElement | null;
+    if (
+      panel &&
+      active &&
+      panel.contains(active) &&
+      (active.tagName === "INPUT" || active.tagName === "SELECT")
+    ) {
+      return;
+    }
     const main = document.querySelector("main");
     const scroll = main?.scrollTop ?? 0;
     renderMonitors(document.getElementById("tab-monitors")!).then(() => {

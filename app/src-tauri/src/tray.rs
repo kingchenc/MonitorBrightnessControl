@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use tauri::{
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager,
     menu::{Menu, MenuBuilder, MenuEvent, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
@@ -40,9 +40,14 @@ pub fn install(app: &AppHandle, state: Arc<AppState>) -> tauri::Result<()> {
                 {
                     let app = tray.app_handle();
                     if let Some(w) = app.get_webview_window("main") {
+                        // Order matters: unminimize *before* set_focus, and
+                        // focus last, so the freshly shown window actually owns
+                        // keyboard/mouse focus. Otherwise the first click in the
+                        // window only activates it and is swallowed instead of
+                        // hitting the control under the cursor.
                         let _ = w.show();
-                        let _ = w.set_focus();
                         let _ = w.unminimize();
+                        let _ = w.set_focus();
                     }
                     state.refresh_monitors();
                 }
@@ -143,11 +148,11 @@ fn handle_menu_event(app: &AppHandle, state: &Arc<AppState>, event: MenuEvent) {
         }
         "all-up" => {
             state.step_brightness(None, STEP_PERCENT);
-            rebuild_menu(app, state);
+            notify_changed(app, state);
         }
         "all-down" => {
             state.step_brightness(None, -STEP_PERCENT);
-            rebuild_menu(app, state);
+            notify_changed(app, state);
         }
         "toggle-night" => {
             let on = !state.night_mode();
@@ -158,31 +163,40 @@ fn handle_menu_event(app: &AppHandle, state: &Arc<AppState>, event: MenuEvent) {
                 80.0
             };
             state.set_brightness(None, target);
-            rebuild_menu(app, state);
+            notify_changed(app, state);
         }
         other => {
             if let Some(rest) = other.strip_prefix("profile:") {
                 let profiles = state.profiles();
                 if let Some(p) = profiles.items.iter().find(|p| p.id == rest) {
                     crate::profiles::apply_profile(state, p);
-                    rebuild_menu(app, state);
+                    notify_changed(app, state);
                 }
             } else if let Some(rest) = other.strip_prefix("up:") {
                 state.step_brightness(Some(rest), STEP_PERCENT);
-                rebuild_menu(app, state);
+                notify_changed(app, state);
             } else if let Some(rest) = other.strip_prefix("down:") {
                 state.step_brightness(Some(rest), -STEP_PERCENT);
-                rebuild_menu(app, state);
+                notify_changed(app, state);
             } else if let Some(rest) = other.strip_prefix("set:") {
                 if let Some((id, val)) = rest.split_once("::") {
                     if let Ok(v) = val.parse::<f32>() {
                         state.set_brightness(Some(id), v);
-                        rebuild_menu(app, state);
+                        notify_changed(app, state);
                     }
                 }
             }
         }
     }
+}
+
+/// Rebuild the tray menu *and* tell the main window to re-read monitor state.
+/// Called after every tray action that changes brightness/contrast/preset so
+/// the open window reflects the change immediately instead of looking stale
+/// until the next manual refresh.
+fn notify_changed(app: &AppHandle, state: &Arc<AppState>) {
+    rebuild_menu(app, state);
+    let _ = app.emit("monitors-changed", ());
 }
 
 pub fn rebuild_menu(app: &AppHandle, state: &Arc<AppState>) {

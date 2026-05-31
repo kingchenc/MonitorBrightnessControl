@@ -141,26 +141,18 @@ impl Drop for PhysicalMonitor {
     }
 }
 
-impl MonitorHandle for PhysicalMonitor {
-    fn info(&self) -> &MonitorInfo {
-        &self.info
-    }
+impl PhysicalMonitor {
+    /// Total `SetVCPFeature` attempts before giving up on a write that the
+    /// display keeps dropping.
+    const WRITE_ATTEMPTS: u32 = 4;
+    /// Pause between write attempts so the DDC/CI controller can wake up.
+    const WRITE_RETRY_DELAY_MS: u64 = 50;
 
-    fn get_brightness_percent(&self) -> Result<f32> {
-        let v = self.get_vcp(crate::vcp::VcpFeature::Luminance.code())?;
-        Ok(v.percent())
-    }
-
-    fn set_brightness_percent(&self, percent: f32) -> Result<()> {
-        // Re-read the maximum so we always send the right scale, even for
-        // exotic monitors that don't max at 100.
-        let cur = self.get_vcp(crate::vcp::VcpFeature::Luminance.code())?;
-        let abs = cur.percent_to_absolute(percent);
-        self.set_vcp(crate::vcp::VcpFeature::Luminance.code(), abs)
-    }
-
-    fn get_vcp(&self, code: u8) -> Result<VcpValue> {
-        let _g = self.lock.lock();
+    /// Read a VCP value assuming the per-monitor `lock` is already held. The
+    /// public [`MonitorHandle::get_vcp`] and the verify loop inside
+    /// [`MonitorHandle::set_vcp`] both go through this so they never re-enter
+    /// the non-reentrant mutex.
+    fn get_vcp_locked(&self, code: u8) -> Result<VcpValue> {
         let mut vcp_code_type: MC_VCP_CODE_TYPE = MC_VCP_CODE_TYPE::default();
         let mut current: u32 = 0;
         let mut maximum: u32 = 0;
@@ -182,18 +174,83 @@ impl MonitorHandle for PhysicalMonitor {
         }
         Ok(VcpValue::new(current as u16, maximum as u16))
     }
+}
+
+impl MonitorHandle for PhysicalMonitor {
+    fn info(&self) -> &MonitorInfo {
+        &self.info
+    }
+
+    fn get_brightness_percent(&self) -> Result<f32> {
+        let v = self.get_vcp(crate::vcp::VcpFeature::Luminance.code())?;
+        Ok(v.percent())
+    }
+
+    fn set_brightness_percent(&self, percent: f32) -> Result<()> {
+        // Re-read the maximum so we always send the right scale, even for
+        // exotic monitors that don't max at 100.
+        let cur = self.get_vcp(crate::vcp::VcpFeature::Luminance.code())?;
+        let abs = cur.percent_to_absolute(percent);
+        self.set_vcp(crate::vcp::VcpFeature::Luminance.code(), abs)
+    }
+
+    fn get_vcp(&self, code: u8) -> Result<VcpValue> {
+        let _g = self.lock.lock();
+        self.get_vcp_locked(code)
+    }
 
     fn set_vcp(&self, code: u8, value: u16) -> Result<()> {
+        // Hold the per-monitor lock for the whole read-write-verify sequence so
+        // another thread cannot interleave a DDC/CI transaction on the same
+        // handle and confuse the verification.
         let _g = self.lock.lock();
-        // SAFETY: `self.handle` is owned and valid; SetVCPFeature does not
-        // retain any pointer.
-        let ok = unsafe { SetVCPFeature(self.handle, code, value as u32) };
-        if ok == 0 {
-            return Err(Error::Platform(format!(
-                "SetVCPFeature(0x{code:02X}, {value}) failed"
-            )));
+
+        // Read the current value first so we can tell a quantized accept (value
+        // moved) from a dropped write (value unchanged).
+        let prev = self.get_vcp_locked(code).ok().map(|v| v.current);
+
+        let mut wrote_ok = false;
+        for attempt in 0..Self::WRITE_ATTEMPTS {
+            // SAFETY: `self.handle` is owned and valid; SetVCPFeature does not
+            // retain any pointer.
+            let ok = unsafe { SetVCPFeature(self.handle, code, value as u32) };
+            wrote_ok = ok != 0;
+            if wrote_ok {
+                // Verify by reading the value back. Many displays silently drop
+                // the first DDC/CI write after the panel has gone idle and only
+                // honour the second — without this check `SetVCPFeature` reports
+                // success even though nothing changed, so the user has to click
+                // again. We retry until the value actually lands.
+                match self.get_vcp_locked(code) {
+                    Ok(after) => {
+                        if crate::vcp::write_accepted(prev, after.current, value) {
+                            return Ok(());
+                        }
+                        // Unchanged from `prev` and still off target → the write
+                        // was dropped; fall through to retry.
+                    }
+                    // Cannot read this code back (write-only feature or a
+                    // transient read failure) — trust the successful write
+                    // rather than retrying blindly.
+                    Err(_) => return Ok(()),
+                }
+            }
+            if attempt + 1 < Self::WRITE_ATTEMPTS {
+                // Give the display controller a moment to wake before retrying.
+                std::thread::sleep(std::time::Duration::from_millis(Self::WRITE_RETRY_DELAY_MS));
+            }
         }
-        Ok(())
+
+        if wrote_ok {
+            Err(Error::Platform(format!(
+                "SetVCPFeature(0x{code:02X}, {value}) was not accepted by the display after {} attempts",
+                Self::WRITE_ATTEMPTS
+            )))
+        } else {
+            Err(Error::Platform(format!(
+                "SetVCPFeature(0x{code:02X}, {value}) failed"
+            )))
+        }
     }
 
     fn capabilities(&self) -> Result<Capabilities> {

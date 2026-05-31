@@ -134,6 +134,30 @@ impl VcpValue {
     }
 }
 
+/// Decide whether a verified VCP write actually "took", given the value read
+/// immediately *before* the write (`prev`, `None` if it could not be read), the
+/// value read back immediately *after* (`after`), and what we asked for
+/// (`target`).
+///
+/// * Accepts when the read-back equals the target exactly.
+/// * Accepts when the read-back moved away from `prev` — some displays quantize
+///   to their own internal step grid and land near, but not exactly on, the
+///   requested value.
+/// * Accepts when there was no prior reading to compare against (best effort —
+///   never loop forever on a display we cannot read).
+/// * Rejects only when the value is unchanged from `prev` **and** still off
+///   target. That is the classic "first DDC/CI write after the panel went idle
+///   was silently dropped" case — the caller should back off briefly and retry.
+pub fn write_accepted(prev: Option<u16>, after: u16, target: u16) -> bool {
+    if after == target {
+        return true;
+    }
+    match prev {
+        Some(p) => after != p,
+        None => true,
+    }
+}
+
 /// Standard ColorPreset (0x14) values per MCCS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -231,6 +255,23 @@ mod tests {
         let v = VcpValue::new(0, 0);
         assert_eq!(v.percent(), 0.0);
         assert_eq!(v.percent_to_absolute(50.0), 0);
+    }
+
+    #[test]
+    fn write_accepted_logic() {
+        // Exact landing → accepted regardless of prior value.
+        assert!(write_accepted(Some(20), 50, 50));
+        assert!(write_accepted(None, 50, 50));
+        // Quantized: moved away from prev but not exactly on target → accepted.
+        assert!(write_accepted(Some(20), 49, 50));
+        // Dropped: unchanged from prev and still off target → rejected (retry).
+        assert!(!write_accepted(Some(20), 20, 50));
+        // No prior reading available → best-effort accept (never loop forever).
+        assert!(write_accepted(None, 20, 50));
+        // Enumerated codes (e.g. color preset): old value sticks → rejected.
+        assert!(!write_accepted(Some(4), 4, 5));
+        // Enumerated code accepted exactly.
+        assert!(write_accepted(Some(4), 5, 5));
     }
 
     #[test]
