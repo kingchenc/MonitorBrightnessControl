@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { platform } from "@tauri-apps/plugin-os";
 import { el, setStatus } from "../ui";
 import { Locale, SUPPORTED_LOCALES, setLocale, t } from "../i18n";
 
@@ -125,26 +126,49 @@ async function buildStartupForm(_s: Settings): Promise<HTMLElement> {
   card.appendChild(el("h2", {}, [t("settings.startup")]));
   card.appendChild(el("p", { className: "muted" }, [t("settings.startup.launch.desc")]));
 
-  let currentlyEnabled = false;
+  let isWindows = false;
   try {
-    currentlyEnabled = await isEnabled();
+    isWindows = platform() === "windows";
+  } catch {
+    isWindows = false;
+  }
+
+  let normalEnabled = false;
+  try {
+    normalEnabled = await isEnabled();
   } catch (e) {
     console.warn("autostart isEnabled failed", e);
   }
 
+  let adminEnabled = false;
+  if (isWindows) {
+    try {
+      adminEnabled = await invoke<boolean>("admin_autostart_status");
+    } catch (e) {
+      console.warn("admin_autostart_status failed", e);
+    }
+  }
+
+  // --- Normal login-item autostart ---
   const row = el("div", { className: "row" });
   row.appendChild(el("label", {}, [t("settings.startup.launch")]));
-  const cb = el("input", { type: "checkbox", checked: currentlyEnabled }) as HTMLInputElement;
+  const cb = el("input", { type: "checkbox", checked: normalEnabled }) as HTMLInputElement;
+  // Will be assigned below once the admin checkbox exists.
+  let adminCb: HTMLInputElement | null = null;
   cb.addEventListener("change", async () => {
     try {
       if (cb.checked) {
         await enable();
+        // Mutually exclusive with the elevated task.
+        if (isWindows && adminCb && adminCb.checked) {
+          await invoke("set_admin_autostart", { enabled: false });
+          adminCb.checked = false;
+        }
       } else {
         await disable();
       }
-      // Reflect the OS truth — some installations refuse the change.
       cb.checked = await isEnabled();
-      setStatus(cb.checked ? t("status.saved.settings") : t("status.saved.settings"));
+      setStatus(t("status.saved.settings"));
     } catch (e) {
       cb.checked = !cb.checked;
       setStatus(`${t("common.error")}: ${e}`);
@@ -152,6 +176,47 @@ async function buildStartupForm(_s: Settings): Promise<HTMLElement> {
   });
   row.appendChild(cb);
   card.appendChild(row);
+
+  // --- Elevated Task Scheduler autostart (Windows only) ---
+  if (isWindows) {
+    card.appendChild(
+      el("p", { className: "muted small" }, [t("settings.startup.admin.desc")]),
+    );
+    const adminRow = el("div", { className: "row" });
+    adminRow.appendChild(el("label", {}, [t("settings.startup.admin")]));
+    adminCb = el("input", { type: "checkbox", checked: adminEnabled }) as HTMLInputElement;
+    const localAdminCb = adminCb;
+    localAdminCb.addEventListener("change", async () => {
+      const want = localAdminCb.checked;
+      try {
+        const now = await invoke<boolean>("set_admin_autostart", { enabled: want });
+        localAdminCb.checked = now;
+        if (now) {
+          // Disable the non-elevated login item to avoid a double launch.
+          try {
+            if (await isEnabled()) await disable();
+          } catch {
+            /* ignore */
+          }
+          cb.checked = false;
+          setStatus(t("status.startup.admin_enabled"));
+        } else {
+          setStatus(t("status.startup.admin_disabled"));
+        }
+      } catch (e) {
+        // Revert the checkbox to the real state (UAC cancelled, etc.).
+        try {
+          localAdminCb.checked = await invoke<boolean>("admin_autostart_status");
+        } catch {
+          localAdminCb.checked = !want;
+        }
+        setStatus(`${t("common.error")}: ${e}`);
+      }
+    });
+    adminRow.appendChild(localAdminCb);
+    card.appendChild(adminRow);
+  }
+
   return card;
 }
 

@@ -8,6 +8,7 @@
 //! * persistent settings + per-app profiles,
 //! * the auto-dim engine.
 
+mod admin_autostart;
 mod auto_dim;
 mod commands;
 mod config;
@@ -71,6 +72,8 @@ pub fn run() {
             commands::list_settings_backups,
             commands::delete_settings_backup,
             commands::restore_settings_backup,
+            commands::admin_autostart_status,
+            commands::set_admin_autostart,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

@@ -172,6 +172,21 @@ pub fn restore_settings_backup(
     Ok(restored)
 }
 
+// --- Elevated autostart (Task Scheduler) ------------------------------------
+
+#[tauri::command]
+pub fn admin_autostart_status() -> Result<bool, String> {
+    crate::admin_autostart::status()
+}
+
+/// Create or remove the elevated Task Scheduler autostart entry. On Windows
+/// this triggers a UAC prompt. Returns the resulting status (true = enabled).
+#[tauri::command]
+pub fn set_admin_autostart(enabled: bool) -> Result<bool, String> {
+    crate::admin_autostart::set(enabled)?;
+    crate::admin_autostart::status()
+}
+
 #[tauri::command]
 pub fn quit_app(app: tauri::AppHandle, state: State<'_, Arc<AppState>>) {
     state.request_quit();
