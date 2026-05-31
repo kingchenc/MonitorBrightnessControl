@@ -101,6 +101,20 @@ async function main() {
     }
   });
 
+  // Only the Monitors tab reflects live backend scans. Re-rendering the
+  // Settings / Profiles tabs on a background event would reset the scroll
+  // position and wipe in-progress edits, so we leave them untouched — they
+  // refresh on tab switch or after their own actions. Scroll position of the
+  // Monitors tab is preserved across the re-render.
+  function autoRerenderMonitors() {
+    if (activeTab() !== "monitors") return;
+    const main = document.querySelector("main");
+    const scroll = main?.scrollTop ?? 0;
+    renderMonitors(document.getElementById("tab-monitors")!).then(() => {
+      if (main) main.scrollTop = scroll;
+    });
+  }
+
   // Backend scan lifecycle: disable Refresh and show a scan-in-progress
   // status while monitors are being enumerated.
   await listen<boolean>("scan-state", (e) => {
@@ -111,13 +125,13 @@ async function main() {
     } else {
       setStatus(t("status.updated"));
     }
-    renderActive(activeTab());
+    autoRerenderMonitors();
   });
 
-  // Re-render whichever tab is active each time the backend reports a
-  // monitor change (initial enumeration finished, manual refresh, etc.).
+  // Re-render the Monitors tab each time the backend reports a monitor change
+  // (initial enumeration finished, manual refresh, etc.).
   await listen("monitors-changed", () => {
-    renderActive(activeTab());
+    autoRerenderMonitors();
   });
 
   // Assume an initial scan is in flight: the backend kicks one off in its
