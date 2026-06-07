@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "brightness-cli"
-version = "1.0.4"
+version = "1.0.5"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "brightness-core"
-version = "1.0.4"
+version = "1.0.5"
 dependencies = [
  "bitflags 2.11.1",
  "core-foundation",
@@ -2432,7 +2432,7 @@ dependencies = [
 
 [[package]]
 name = "monitor-brightness-control"
-version = "1.0.4"
+version = "1.0.5"
 dependencies = [
  "anyhow",
  "brightness-core",
