@@ -27,7 +27,14 @@ cd ..
 cargo build --release -p monitor-brightness-control --features custom-protocol
 ```
 
-`--features custom-protocol` is **required** when building with plain `cargo build`. Without it, Tauri's webview points at `devUrl` (`http://localhost:5173`) and the running app shows `ERR_CONNECTION_REFUSED`. The wrapper `cargo tauri build` enables this feature automatically:
+A workspace alias wraps that exact command, so you can also run:
+
+```bash
+npm --prefix app run build    # refresh app/dist/
+cargo app-release             # = build --release -p monitor-brightness-control --features custom-protocol
+```
+
+`--features custom-protocol` is **required** when building with plain `cargo build`. Without it, Tauri's webview points at `devUrl` (`http://localhost:5173`) and the running app shows `ERR_CONNECTION_REFUSED`. To make this mistake impossible to ship, the app crate carries a `compile_error!` guard that fails any release build that omits the feature. The wrapper `cargo tauri build` enables this feature automatically:
 
 ```bash
 cargo install tauri-cli --version "^2.0" --locked

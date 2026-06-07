@@ -1,0 +1,9 @@
+# Cargo aliases for this workspace.
+#
+# `app-release` builds the desktop app the way it must be shipped: with the
+# `custom-protocol` feature enabled. Without that feature Tauri keeps the
+# webview pointed at the Vite dev server (devUrl http://localhost:5173) and the
+# packaged app fails with ERR_CONNECTION_REFUSED. `cargo tauri build` sets the
+# feature automatically; this alias gives the same guarantee for plain cargo.
+[alias]
+app-release = "build --release -p monitor-brightness-control --features custom-protocol"
