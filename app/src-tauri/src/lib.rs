@@ -8,6 +8,22 @@
 //! * persistent settings + per-app profiles,
 //! * the auto-dim engine.
 
+// Production safety guard. Tauri selects the frontend source at compile time as
+// `dev = !custom_protocol`. A release build that omits the `custom-protocol`
+// feature therefore points the webview at the Vite dev server
+// (devUrl http://localhost:5173) instead of embedding `app/dist`, so the
+// packaged app starts with ERR_CONNECTION_REFUSED. Fail loudly here rather than
+// silently shipping a broken binary. Build with `cargo tauri build`, the
+// `cargo app-release` alias, or
+// `cargo build --release -p monitor-brightness-control --features custom-protocol`.
+#[cfg(all(not(debug_assertions), not(feature = "custom-protocol")))]
+compile_error!(
+    "release builds require the `custom-protocol` feature; without it the Tauri webview \
+     loads the Vite dev server (devUrl http://localhost:5173) and the app shows \
+     ERR_CONNECTION_REFUSED. Build with `cargo tauri build`, `cargo app-release`, or \
+     `cargo build --release -p monitor-brightness-control --features custom-protocol`."
+);
+
 mod admin_autostart;
 mod auto_dim;
 mod commands;
