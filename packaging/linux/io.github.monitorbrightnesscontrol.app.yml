@@ -38,7 +38,10 @@ modules:
     build-commands:
       - npm --prefix app ci --offline || npm --prefix app install
       - npm --prefix app run build
-      - cargo build --release --manifest-path app/src-tauri/Cargo.toml
+      # `--features custom-protocol` is mandatory: without it Tauri serves the
+      # webview from devUrl (http://localhost:5173) instead of the embedded
+      # frontend, so the Flatpak would start with ERR_CONNECTION_REFUSED.
+      - cargo build --release --manifest-path app/src-tauri/Cargo.toml --features custom-protocol
       - install -Dm755 target/release/monitor-brightness-control /app/bin/monitor-brightness-control
       - install -Dm644 packaging/linux/monitor-brightness-control.desktop
             /app/share/applications/io.github.monitorbrightnesscontrol.app.desktop
