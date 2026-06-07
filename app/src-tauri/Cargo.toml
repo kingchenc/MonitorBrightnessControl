@@ -17,9 +17,12 @@ name = "monitor-brightness-control"
 path = "src/main.rs"
 
 [features]
-# `cargo tauri build` enables this automatically; for direct
-# `cargo build --release` invocations callers must pass
-# `--features custom-protocol` (see docs/BUILDING.md).
+# Embeds the frontend instead of pointing the webview at the Vite dev server.
+# Required for every release/distribution build. The CLI's `cargo tauri build`
+# does NOT enable this app feature on its own, so all build paths (CI, release,
+# Flatpak, plain `cargo build --release`) must pass `--features custom-protocol`
+# explicitly; the `cargo app-release` alias and docs/BUILDING.md do this. A
+# compile-time guard in src/lib.rs fails any release build that omits it.
 custom-protocol = ["tauri/custom-protocol"]
 
 [build-dependencies]

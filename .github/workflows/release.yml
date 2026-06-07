@@ -57,7 +57,9 @@ jobs:
       # secrets, re-introduce a signed-build step gated on their presence.
       - name: Tauri build
         working-directory: app/src-tauri
-        run: cargo tauri build --target ${{ matrix.target }}
+        # --features custom-protocol enables the app feature explicitly so the
+        # frontend is embedded (otherwise the webview loads the Vite dev server).
+        run: cargo tauri build --features custom-protocol --target ${{ matrix.target }}
 
       - name: Collect release artifacts
         shell: bash
