@@ -43,6 +43,35 @@ interface ProfileTemplate {
 const VCP_CONTRAST = 0x12;
 const VCP_COLOR_PRESET = 0x14;
 
+// Collapsed/expanded state of each profile card is a UI preference, persisted
+// in localStorage (keyed by profile id) so it survives reloads and restarts.
+const COLLAPSE_KEY = "mbc.profiles.collapsed";
+
+function collapsedSet(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? (arr as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function isCollapsed(id: string): boolean {
+  return collapsedSet().has(id);
+}
+
+function setCollapsed(id: string, collapsed: boolean) {
+  const s = collapsedSet();
+  if (collapsed) s.add(id);
+  else s.delete(id);
+  try {
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...s]));
+  } catch {
+    // localStorage unavailable — collapse state just won't persist.
+  }
+}
+
 function colorPresetOptions() {
   return [
     { label: t("monitors.preset.srgb"), value: 1 },
@@ -216,17 +245,42 @@ function profileCard(
   host: HTMLElement,
   templates: ProfileTemplate[],
 ): HTMLElement {
-  const card = el("article", { className: "card" });
-  card.appendChild(el("h3", {}, [profile.name || t("profiles.unnamed")]));
+  const card = el("article", { className: "card profile-card" });
+
+  // Collapsible header — clicking it toggles the body and persists the choice.
+  const chevron = el("span", { className: "chevron" }, []);
+  const titleText = el("h3", {}, [profile.name || t("profiles.unnamed")]);
+  const header = el(
+    "button",
+    { type: "button", className: "profile-header" },
+    [chevron, titleText],
+  ) as HTMLButtonElement;
+  const body = el("div", { className: "profile-body" });
+
+  const applyCollapsed = (collapsed: boolean) => {
+    card.classList.toggle("collapsed", collapsed);
+    body.style.display = collapsed ? "none" : "";
+    chevron.textContent = collapsed ? "▸" : "▾"; // ▸ / ▾
+    header.setAttribute("aria-expanded", String(!collapsed));
+  };
+  header.addEventListener("click", () => {
+    const next = !card.classList.contains("collapsed");
+    applyCollapsed(next);
+    setCollapsed(profile.id, next);
+  });
+  card.appendChild(header);
+  card.appendChild(body);
 
   const nameRow = el("div", { className: "row" });
   nameRow.appendChild(el("label", {}, [t("profiles.name")]));
   const nameInput = el("input", { type: "text", value: profile.name }) as HTMLInputElement;
-  nameInput.addEventListener("change", () => {
+  nameInput.addEventListener("input", () => {
     profile.name = nameInput.value;
+    // Keep the collapsed header label in sync with edits.
+    titleText.textContent = profile.name || t("profiles.unnamed");
   });
   nameRow.appendChild(nameInput);
-  card.appendChild(nameRow);
+  body.appendChild(nameRow);
 
   const idRow = el("div", { className: "row" });
   idRow.appendChild(el("label", {}, [t("profiles.app_id")]));
@@ -244,15 +298,15 @@ function profileCard(
     el("p", { className: "muted small" }, [t("profiles.app_id_hint")]),
   );
   idRow.appendChild(appWrap);
-  card.appendChild(idRow);
+  body.appendChild(idRow);
 
   if (monitors.length === 0) {
-    card.appendChild(
+    body.appendChild(
       el("p", { className: "muted small" }, [t("profiles.no_monitors")]),
     );
   } else {
     for (const m of monitors) {
-      card.appendChild(monitorOverride(profile, m));
+      body.appendChild(monitorOverride(profile, m));
     }
   }
 
@@ -263,15 +317,16 @@ function profileCard(
     }
     paint(host, all, monitors, templates);
   });
-  card.appendChild(reloadBtn);
+  body.appendChild(reloadBtn);
 
   const del = el("button", { type: "button", className: "danger" }, [t("profiles.delete")]);
   del.addEventListener("click", () => {
     all.items = all.items.filter((p) => p.id !== profile.id);
     paint(host, all, monitors, templates);
   });
-  card.appendChild(del);
+  body.appendChild(del);
 
+  applyCollapsed(isCollapsed(profile.id));
   return card;
 }
 

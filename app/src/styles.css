@@ -260,6 +260,43 @@ footer {
   gap: 8px;
 }
 
+/* Collapsible profile cards. The header is a full-width button styled to look
+   like a heading; clicking it toggles `.profile-body`. */
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.profile-header:hover {
+  background: none;
+}
+
+.profile-header h3 {
+  margin: 0;
+}
+
+.profile-header .chevron {
+  flex: 0 0 auto;
+  width: 1em;
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.profile-body {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .schedule-list {
   display: grid;
   gap: 8px;
