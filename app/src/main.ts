@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { renderMonitors } from "./views/monitors";
+import { renderMonitors, clearVcpCache } from "./views/monitors";
 import { renderSettings } from "./views/settings";
 import { renderProfiles } from "./views/profiles";
 import { renderAbout } from "./views/about";
@@ -92,6 +92,9 @@ async function main() {
     setScanning(true);
     setStatus(t("status.refreshing"));
     try {
+      // Explicit refresh: drop the cached VCP reads so contrast/colour are
+      // re-queried from the hardware (picks up changes made outside the app).
+      clearVcpCache();
       // Fire-and-forget — the backend emits `monitors-changed` when work
       // finishes, so the UI is not held by the slow DDC/CI roundtrips.
       await invoke("trigger_refresh");

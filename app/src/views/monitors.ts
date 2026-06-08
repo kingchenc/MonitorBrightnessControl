@@ -9,6 +9,30 @@ interface MonitorRow {
   percent: number | null;
 }
 
+interface VcpView {
+  current: number;
+  maximum: number;
+}
+
+// Client-side cache of VCP reads (contrast 0x12, colour preset 0x14, …) keyed
+// by `${monitorId}:${code}`. DDC/CI reads take seconds, so once a value is
+// known we render from the cache on every re-render instead of flashing the
+// default placeholder and re-reading the hardware each time. The cache is kept
+// up to date when the user changes a value, and is cleared on an explicit
+// Refresh so external changes are picked up.
+const vcpCache = new Map<string, VcpView>();
+const vcpUnsupported = new Set<string>();
+
+function vcpKey(id: string, code: number): string {
+  return `${id}:${code}`;
+}
+
+/** Drop all cached VCP reads so the next render re-queries the hardware. */
+export function clearVcpCache() {
+  vcpCache.clear();
+  vcpUnsupported.clear();
+}
+
 export async function renderMonitors(host: HTMLElement) {
   host.replaceChildren();
   host.appendChild(el("p", { className: "muted" }, [t("monitors.loading")]));
@@ -104,23 +128,42 @@ function vcpSlider(id: string, code: number, label: string): HTMLElement {
   wrap.appendChild(slider);
   wrap.appendChild(valueLabel);
 
-  invoke<{ current: number; maximum: number }>("get_vcp", { id, code })
-    .then((v) => {
-      if (v.maximum > 0) {
-        slider.max = String(v.maximum);
-        slider.value = String(v.current);
-        valueLabel.textContent = `${Math.round((v.current / v.maximum) * 100)}%`;
-      }
-    })
-    .catch(() => {
-      slider.disabled = true;
-      valueLabel.textContent = "n/a";
-    });
+  const key = vcpKey(id, code);
+  const render = (v: VcpView) => {
+    if (v.maximum > 0) {
+      slider.max = String(v.maximum);
+      slider.value = String(v.current);
+      valueLabel.textContent = `${Math.round((v.current / v.maximum) * 100)}%`;
+      slider.disabled = false;
+    }
+  };
+
+  const cached = vcpCache.get(key);
+  if (cached) {
+    render(cached);
+  } else if (vcpUnsupported.has(key)) {
+    slider.disabled = true;
+    valueLabel.textContent = "n/a";
+  } else {
+    // First time we see this control — read the hardware once, then cache it.
+    invoke<VcpView>("get_vcp", { id, code })
+      .then((v) => {
+        vcpCache.set(key, v);
+        // Don't clobber the user if they grabbed the slider in the meantime.
+        if (document.activeElement !== slider) render(v);
+      })
+      .catch(() => {
+        vcpUnsupported.add(key);
+        slider.disabled = true;
+        valueLabel.textContent = "n/a";
+      });
+  }
 
   const apply = debounce(async (value: number) => {
     try {
       await invoke("set_vcp", { id, code, value });
       const max = Number(slider.max);
+      vcpCache.set(key, { current: value, maximum: max });
       valueLabel.textContent =
         max > 0 ? `${Math.round((value / max) * 100)}%` : `${value}`;
     } catch (e) {
@@ -148,20 +191,31 @@ function vcpEnum(
     select.appendChild(opt);
   }
   wrap.appendChild(select);
-  invoke<{ current: number; maximum: number }>("get_vcp", { id, code })
-    .then((v) => {
-      select.value = String(v.current);
-    })
-    .catch(() => {
-      select.disabled = true;
-    });
+
+  const key = vcpKey(id, code);
+  const cached = vcpCache.get(key);
+  if (cached) {
+    select.value = String(cached.current);
+  } else if (vcpUnsupported.has(key)) {
+    select.disabled = true;
+  } else {
+    invoke<VcpView>("get_vcp", { id, code })
+      .then((v) => {
+        vcpCache.set(key, v);
+        if (document.activeElement !== select) select.value = String(v.current);
+      })
+      .catch(() => {
+        vcpUnsupported.add(key);
+        select.disabled = true;
+      });
+  }
+
   select.addEventListener("change", async () => {
     try {
-      await invoke("set_vcp", {
-        id,
-        code,
-        value: Number(select.value),
-      });
+      const value = Number(select.value);
+      await invoke("set_vcp", { id, code, value });
+      const prev = vcpCache.get(key);
+      vcpCache.set(key, { current: value, maximum: prev?.maximum ?? 0 });
     } catch (e) {
       setStatus(`${label}: ${e}`);
     }
