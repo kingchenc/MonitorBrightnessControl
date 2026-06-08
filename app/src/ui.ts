@@ -53,6 +53,89 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 /**
+ * Persisted collapsed/expanded state for a group of cards, backed by a single
+ * localStorage key holding the list of collapsed ids.
+ */
+export interface CollapseStore {
+  has(id: string): boolean;
+  set(id: string, collapsed: boolean): void;
+}
+
+export function collapsedStore(storageKey: string): CollapseStore {
+  const read = (): Set<string> => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? (arr as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  };
+  return {
+    has: (id) => read().has(id),
+    set: (id, collapsed) => {
+      const s = read();
+      if (collapsed) s.add(id);
+      else s.delete(id);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify([...s]));
+      } catch {
+        // localStorage unavailable — state just won't persist.
+      }
+    },
+  };
+}
+
+/**
+ * Turn a `.card` whose first child is its heading into a collapsible card:
+ * the heading becomes a clickable header (with a chevron) that toggles the rest
+ * of the card. The collapsed state is read from / written to `store` under
+ * `id`. Returns the same card element for chaining.
+ */
+export function makeCollapsibleCard(
+  card: HTMLElement,
+  id: string,
+  store: CollapseStore,
+): HTMLElement {
+  const heading = card.firstElementChild as HTMLElement | null;
+  if (!heading) return card;
+
+  // Move everything after the heading into a body wrapper.
+  const body = el("div", { className: "card-body" });
+  let next = heading.nextSibling;
+  while (next) {
+    const after = next.nextSibling;
+    body.appendChild(next);
+    next = after;
+  }
+
+  // Replace the heading with a header button that wraps a chevron + heading.
+  const chevron = el("span", { className: "chevron" }, []);
+  const header = el(
+    "button",
+    { type: "button", className: "collapse-header" },
+    [chevron],
+  ) as HTMLButtonElement;
+  card.replaceChild(header, heading);
+  header.appendChild(heading);
+  card.appendChild(body);
+
+  const apply = (collapsed: boolean) => {
+    card.classList.toggle("collapsed", collapsed);
+    body.style.display = collapsed ? "none" : "";
+    chevron.textContent = collapsed ? "▸" : "▾"; // ▸ collapsed / ▾ expanded
+    header.setAttribute("aria-expanded", String(!collapsed));
+  };
+  header.addEventListener("click", () => {
+    const collapsed = !card.classList.contains("collapsed");
+    apply(collapsed);
+    store.set(id, collapsed);
+  });
+  apply(store.has(id));
+  return card;
+}
+
+/**
  * Debounce: returns a function that waits `delay` ms after the last call
  * before invoking `fn`. Used to throttle slider scrubs.
  */

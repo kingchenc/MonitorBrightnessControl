@@ -260,9 +260,11 @@ footer {
   gap: 8px;
 }
 
-/* Collapsible profile cards. The header is a full-width button styled to look
-   like a heading; clicking it toggles `.profile-body`. */
-.profile-header {
+/* Collapsible cards. The header is a full-width button styled to look like a
+   heading; clicking it toggles the body. Shared by profile cards and the
+   settings sections. */
+.profile-header,
+.collapse-header {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -276,15 +278,18 @@ footer {
   color: inherit;
 }
 
-.profile-header:hover {
+.profile-header:hover,
+.collapse-header:hover {
   background: none;
 }
 
-.profile-header h3 {
+.profile-header h3,
+.collapse-header h2 {
   margin: 0;
 }
 
-.profile-header .chevron {
+.profile-header .chevron,
+.collapse-header .chevron {
   flex: 0 0 auto;
   width: 1em;
   font-size: 0.8em;

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { platform } from "@tauri-apps/plugin-os";
-import { el, setStatus } from "../ui";
+import { el, setStatus, collapsedStore, makeCollapsibleCard } from "../ui";
 import { Locale, SUPPORTED_LOCALES, setLocale, t } from "../i18n";
 
 interface AutoDimSettings {
@@ -100,13 +100,19 @@ export async function renderSettings(
     console.warn("list_monitors failed", e);
   }
 
-  host.appendChild(await buildStartupForm(s));
-  host.appendChild(buildLanguageForm(s, host, onLanguageChange));
-  host.appendChild(buildHotkeyForm(s));
-  host.appendChild(buildAutoDimForm(s));
-  host.appendChild(buildSchedulesForm(s, monitors));
-  host.appendChild(buildSyncForm(s));
-  host.appendChild(await buildBackupForm(s, host, onLanguageChange));
+  // Each settings section is a collapsible card; the open/closed state is
+  // persisted per section so it survives re-renders and restarts.
+  const collapse = collapsedStore("mbc.settings.collapsed");
+  const section = (card: HTMLElement, id: string) =>
+    host.appendChild(makeCollapsibleCard(card, id, collapse));
+
+  section(await buildStartupForm(s), "startup");
+  section(buildLanguageForm(s, host, onLanguageChange), "language");
+  section(buildHotkeyForm(s), "hotkeys");
+  section(buildAutoDimForm(s), "autodim");
+  section(buildSchedulesForm(s, monitors), "schedules");
+  section(buildSyncForm(s), "sync");
+  section(await buildBackupForm(s, host, onLanguageChange), "backup");
 
   const saveBtn = el("button", { type: "button", className: "primary" }, [
     t("settings.save"),
