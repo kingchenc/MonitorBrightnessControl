@@ -39,6 +39,7 @@ use std::sync::Arc;
 
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 use crate::state::AppState;
 
@@ -159,6 +160,12 @@ pub fn run() {
                 event: WindowEvent::CloseRequested { api, .. },
                 ..
             } if label == "main" => {
+                // Persist the window geometry — including which monitor it sits
+                // on — before hiding to the tray, so the next launch reopens it
+                // where the user left it even if the process is later killed
+                // without a clean exit (the plugin otherwise only writes on
+                // RunEvent::Exit).
+                let _ = app.save_window_state(StateFlags::all());
                 if let Some(w) = app.get_webview_window(&label) {
                     let _ = w.hide();
                 }
