@@ -89,6 +89,7 @@ pub fn run() {
             commands::list_settings_backups,
             commands::delete_settings_backup,
             commands::restore_settings_backup,
+            commands::restore_profiles_backup,
             commands::admin_autostart_status,
             commands::set_admin_autostart,
             commands::default_profile_templates,

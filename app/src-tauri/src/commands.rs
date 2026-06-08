@@ -144,7 +144,7 @@ pub fn set_auto_dim(state: State<'_, Arc<AppState>>, enabled: bool) -> Result<()
 // --- Settings backups -------------------------------------------------------
 
 #[tauri::command]
-pub fn backup_settings_now() -> Result<BackupInfo, String> {
+pub fn backup_settings_now() -> Result<Vec<BackupInfo>, String> {
     config::backup_now().map_err(|e| format!("backup failed: {e}"))
 }
 
@@ -169,6 +169,21 @@ pub fn restore_settings_backup(
     let restored =
         config::restore_backup(&file_name).map_err(|e| format!("restore failed: {e}"))?;
     state.reload_settings(restored.clone());
+    tray::rebuild_menu(&app, state.inner());
+    Ok(restored)
+}
+
+/// Restore a profiles backup and refresh the in-memory profiles + tray so the
+/// change takes effect without a restart. Returns the restored profiles.
+#[tauri::command]
+pub fn restore_profiles_backup(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    file_name: String,
+) -> Result<Profiles, String> {
+    let restored =
+        config::restore_profiles(&file_name).map_err(|e| format!("restore failed: {e}"))?;
+    state.reload_profiles(restored.clone());
     tray::rebuild_menu(&app, state.inner());
     Ok(restored)
 }

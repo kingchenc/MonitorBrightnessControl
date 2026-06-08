@@ -51,6 +51,7 @@ interface BackupSettings {
 }
 
 interface BackupInfo {
+  kind: string; // "settings" | "profiles"
   file_name: string;
   created_unix_ms: number;
   size_bytes: number;
@@ -114,6 +115,12 @@ export async function renderSettings(
     try {
       await invoke("save_settings", { settings: s });
       setStatus(t("status.saved.settings"));
+      // Re-render so the backups list reflects the snapshot just taken on save
+      // (when backups are enabled), preserving the scroll position.
+      const main = document.querySelector("main");
+      const scroll = main?.scrollTop ?? 0;
+      await renderSettings(host, onLanguageChange);
+      if (main) main.scrollTop = scroll;
     } catch (e) {
       setStatus(`${t("common.error")}: ${e}`);
     }
@@ -636,7 +643,7 @@ async function buildBackupForm(
   const nowBtn = el("button", { type: "button" }, [t("settings.backup.now")]);
   nowBtn.addEventListener("click", async () => {
     try {
-      await invoke<BackupInfo>("backup_settings_now");
+      await invoke<BackupInfo[]>("backup_settings_now");
       setStatus(t("status.backup.created"));
       renderSettings(host, onLanguageChange);
     } catch (e) {
@@ -682,8 +689,14 @@ function backupRow(
   onLanguageChange: () => void,
 ): HTMLElement {
   const row = el("div", { className: "row backup-item" });
+  const isProfiles = b.kind === "profiles";
   const when = b.created_unix_ms > 0 ? new Date(b.created_unix_ms).toLocaleString() : b.file_name;
   const sizeKb = (b.size_bytes / 1024).toFixed(1);
+  row.appendChild(
+    el("span", { className: "kind-badge" }, [
+      isProfiles ? t("tab.profiles") : t("tab.settings"),
+    ]),
+  );
   row.appendChild(el("span", {}, [`${when}`]));
   row.appendChild(el("span", { className: "muted small" }, [`${sizeKb} KB`]));
 
@@ -691,7 +704,10 @@ function backupRow(
   const restore = el("button", { type: "button" }, [t("settings.backup.restore")]);
   restore.addEventListener("click", async () => {
     try {
-      await invoke<Settings>("restore_settings_backup", { fileName: b.file_name });
+      // Restore the matching config file. Profiles and settings have separate
+      // commands so each refreshes the right in-memory state.
+      const cmd = isProfiles ? "restore_profiles_backup" : "restore_settings_backup";
+      await invoke(cmd, { fileName: b.file_name });
       setStatus(t("status.backup.restored"));
       // Reload the whole settings view and chrome from the restored state.
       onLanguageChange();

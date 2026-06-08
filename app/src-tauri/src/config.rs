@@ -82,6 +82,8 @@ impl Default for BackupSettings {
 /// Metadata about a single backup file, returned to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackupInfo {
+    /// Which config file this snapshots: `"settings"` or `"profiles"`.
+    pub kind: String,
     /// Base file name within the backups directory, e.g.
     /// `settings-1717000000000.toml`. Never contains a path separator.
     pub file_name: String,
@@ -286,7 +288,7 @@ pub fn save_settings(s: &Settings) -> std::io::Result<()> {
     if path.exists() {
         let want_backup = s.backup.enabled || list_backups().is_empty();
         if want_backup {
-            if let Err(e) = create_backup_from(&path) {
+            if let Err(e) = create_backup_from(&path, "settings") {
                 log::warn!("settings backup failed: {e}");
             }
             prune_backups(s.backup.retention);
@@ -317,44 +319,54 @@ fn unix_millis_now() -> u64 {
         .unwrap_or(0)
 }
 
+/// Strip a known backup prefix (`settings-` or `profiles-`), returning the rest
+/// and the kind. `None` if the name doesn't start with a recognised prefix.
+fn split_backup_name(file_name: &str) -> Option<(&'static str, &str)> {
+    if let Some(rest) = file_name.strip_prefix("settings-") {
+        Some(("settings", rest))
+    } else {
+        file_name
+            .strip_prefix("profiles-")
+            .map(|rest| ("profiles", rest))
+    }
+}
+
 /// Validate that `file_name` is a plain backup file name with no path
-/// components, matching `settings-<digits>.toml`. Prevents path traversal in
-/// restore/delete commands.
+/// components, matching `<settings|profiles>-<digits>.toml`. Prevents path
+/// traversal in restore/delete commands.
 fn is_valid_backup_name(file_name: &str) -> bool {
     if file_name.contains('/') || file_name.contains('\\') || file_name.contains("..") {
         return false;
     }
-    match file_name
-        .strip_prefix("settings-")
-        .and_then(|r| r.strip_suffix(".toml"))
-    {
+    match split_backup_name(file_name).and_then(|(_, r)| r.strip_suffix(".toml")) {
         Some(stamp) => !stamp.is_empty() && stamp.bytes().all(|b| b.is_ascii_digit()),
         None => false,
     }
 }
 
 fn parse_stamp(file_name: &str) -> Option<u64> {
-    file_name
-        .strip_prefix("settings-")
-        .and_then(|r| r.strip_suffix(".toml"))
+    split_backup_name(file_name)
+        .and_then(|(_, r)| r.strip_suffix(".toml"))
         .and_then(|s| s.parse::<u64>().ok())
 }
 
-/// Copy `source` into the backups directory under a timestamped name.
-fn create_backup_from(source: &std::path::Path) -> std::io::Result<BackupInfo> {
+/// Copy `source` into the backups directory under a timestamped name. `prefix`
+/// is `"settings"` or `"profiles"`.
+fn create_backup_from(source: &std::path::Path, prefix: &str) -> std::io::Result<BackupInfo> {
     let dir = backups_dir();
     fs::create_dir_all(&dir)?;
     let mut stamp = unix_millis_now();
-    let mut file_name = format!("settings-{stamp}.toml");
+    let mut file_name = format!("{prefix}-{stamp}.toml");
     // Avoid colliding with an existing backup taken in the same millisecond.
     while dir.join(&file_name).exists() {
         stamp += 1;
-        file_name = format!("settings-{stamp}.toml");
+        file_name = format!("{prefix}-{stamp}.toml");
     }
     let dest = dir.join(&file_name);
     fs::copy(source, &dest)?;
     let size_bytes = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
     Ok(BackupInfo {
+        kind: prefix.to_string(),
         file_name,
         created_unix_ms: stamp,
         size_bytes,
@@ -366,38 +378,52 @@ fn create_backup_from(source: &std::path::Path) -> std::io::Result<BackupInfo> {
 /// manual save and regardless of the `backup.enabled` toggle. No-op if a
 /// backup already exists.
 pub fn ensure_initial_backup() {
-    if !list_backups().is_empty() {
-        return;
-    }
-    let path = settings_path();
-    if !path.exists() {
-        // Persist the current (default or loaded) settings so there is a file
-        // to snapshot. save_settings won't itself back up here because the
-        // file does not exist yet.
-        if let Err(e) = save_settings(&load_settings()) {
-            log::warn!("initial settings write failed: {e}");
-            return;
+    let existing = list_backups();
+    let have = |kind: &str| existing.iter().any(|b| b.kind == kind);
+
+    // Settings: guarantee the original configuration is snapshotted, writing
+    // the defaults first if no file exists yet (settings always have a
+    // meaningful default).
+    if !have("settings") {
+        if !settings_path().exists() {
+            if let Err(e) = save_settings(&load_settings()) {
+                log::warn!("initial settings write failed: {e}");
+            }
+        }
+        if settings_path().exists() {
+            match create_backup_from(&settings_path(), "settings") {
+                Ok(info) => log::info!("created initial settings backup {}", info.file_name),
+                Err(e) => log::warn!("initial settings backup failed: {e}"),
+            }
         }
     }
-    match create_backup_from(&settings_path()) {
-        Ok(info) => log::info!("created initial settings backup {}", info.file_name),
-        Err(e) => log::warn!("initial backup failed: {e}"),
+
+    // Profiles: snapshot only when the user already has a profiles file —
+    // there's nothing to preserve otherwise.
+    if !have("profiles") && profiles_path().exists() {
+        match create_backup_from(&profiles_path(), "profiles") {
+            Ok(info) => log::info!("created initial profiles backup {}", info.file_name),
+            Err(e) => log::warn!("initial profiles backup failed: {e}"),
+        }
     }
 }
 
-/// Take a backup of the current settings on demand. Returns the new entry.
-pub fn backup_now() -> std::io::Result<BackupInfo> {
-    let path = settings_path();
-    if !path.exists() {
+/// Take a backup of the current settings (and profiles, if present) on demand.
+/// Returns the new entries.
+pub fn backup_now() -> std::io::Result<Vec<BackupInfo>> {
+    if !settings_path().exists() {
         // Nothing saved yet — persist defaults first so there is something to
         // snapshot, then back that up.
         save_settings(&load_settings())?;
     }
-    let info = create_backup_from(&settings_path())?;
+    let mut out = vec![create_backup_from(&settings_path(), "settings")?];
+    if profiles_path().exists() {
+        out.push(create_backup_from(&profiles_path(), "profiles")?);
+    }
     // Respect retention even for manual backups.
     let retention = load_settings().backup.retention;
     prune_backups(retention);
-    Ok(info)
+    Ok(out)
 }
 
 /// List existing backups, newest first.
@@ -416,10 +442,14 @@ pub fn list_backups() -> Vec<BackupInfo> {
         if !is_valid_backup_name(&name) {
             continue;
         }
+        let kind = split_backup_name(&name)
+            .map(|(k, _)| k.to_string())
+            .unwrap_or_default();
         let meta = entry.metadata().ok();
         let size_bytes = meta.as_ref().map(|m| m.len()).unwrap_or(0);
         let created_unix_ms = parse_stamp(&name).unwrap_or(0);
         out.push(BackupInfo {
+            kind,
             file_name: name,
             created_unix_ms,
             size_bytes,
@@ -429,18 +459,18 @@ pub fn list_backups() -> Vec<BackupInfo> {
     out
 }
 
-/// Delete the oldest backups so that at most `retention` remain.
+/// Delete the oldest backups so that at most `retention` of **each kind**
+/// (settings, profiles) remain.
 pub fn prune_backups(retention: u32) {
     let keep = retention.max(1) as usize;
-    let backups = list_backups(); // newest first
-    if backups.len() <= keep {
-        return;
-    }
+    let backups = list_backups(); // newest first, mixed kinds
     let dir = backups_dir();
-    for old in &backups[keep..] {
-        let p = dir.join(&old.file_name);
-        if let Err(e) = fs::remove_file(&p) {
-            log::warn!("pruning backup {}: {e}", old.file_name);
+    for kind in ["settings", "profiles"] {
+        for old in backups.iter().filter(|b| b.kind == kind).skip(keep) {
+            let p = dir.join(&old.file_name);
+            if let Err(e) = fs::remove_file(&p) {
+                log::warn!("pruning backup {}: {e}", old.file_name);
+            }
         }
     }
 }
@@ -461,10 +491,10 @@ pub fn delete_backup(file_name: &str) -> std::io::Result<()> {
 /// then write the restored settings as the active configuration. Returns the
 /// restored [`Settings`].
 pub fn restore_backup(file_name: &str) -> std::io::Result<Settings> {
-    if !is_valid_backup_name(file_name) {
+    if !is_valid_backup_name(file_name) || !file_name.starts_with("settings-") {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "invalid backup name",
+            "invalid settings backup name",
         ));
     }
     let src = backups_dir().join(file_name);
@@ -478,6 +508,27 @@ pub fn restore_backup(file_name: &str) -> std::io::Result<Settings> {
     // save_settings will snapshot the current file before overwriting, so the
     // pre-restore state is itself recoverable.
     save_settings(&restored)?;
+    Ok(restored)
+}
+
+/// Restore a profiles backup: parse it, snapshot the current profiles (via
+/// save_profiles), then write the restored profiles as active. Returns them.
+pub fn restore_profiles(file_name: &str) -> std::io::Result<Profiles> {
+    if !is_valid_backup_name(file_name) || !file_name.starts_with("profiles-") {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "invalid profiles backup name",
+        ));
+    }
+    let src = backups_dir().join(file_name);
+    let raw = fs::read_to_string(&src)?;
+    let restored: Profiles = toml::from_str(&raw).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("backup parse error: {e}"),
+        )
+    })?;
+    save_profiles(&restored)?;
     Ok(restored)
 }
 
@@ -499,11 +550,26 @@ pub fn load_profiles() -> Profiles {
 pub fn save_profiles(p: &Profiles) -> std::io::Result<()> {
     let dir = config_dir();
     fs::create_dir_all(&dir)?;
+
+    // Snapshot the previous profiles before overwriting, mirroring the settings
+    // backup behaviour. The backup toggle lives in settings, so honour that —
+    // or take one regardless when no backup exists yet.
+    let path = profiles_path();
+    if path.exists() {
+        let backup = load_settings().backup;
+        if backup.enabled || list_backups().is_empty() {
+            if let Err(e) = create_backup_from(&path, "profiles") {
+                log::warn!("profiles backup failed: {e}");
+            }
+            prune_backups(backup.retention);
+        }
+    }
+
     let raw = toml::to_string_pretty(p).map_err(|e| {
         std::io::Error::new(std::io::ErrorKind::InvalidData, format!("toml encode: {e}"))
     })?;
-    let tmp = profiles_path().with_extension("toml.tmp");
+    let tmp = path.with_extension("toml.tmp");
     fs::write(&tmp, raw)?;
-    fs::rename(&tmp, profiles_path())?;
+    fs::rename(&tmp, &path)?;
     Ok(())
 }

@@ -139,6 +139,13 @@ impl AppState {
         Ok(())
     }
 
+    /// Update the in-memory profiles without writing to disk. Used after a
+    /// backup restore, where `config::restore_profiles` has already persisted
+    /// the file (re-saving would create a redundant backup).
+    pub fn reload_profiles(&self, p: Profiles) {
+        *self.profiles.write() = p;
+    }
+
     pub fn set_night_mode(&self, on: bool) {
         *self.night_mode.write() = on;
     }
