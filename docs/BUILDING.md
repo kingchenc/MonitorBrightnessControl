@@ -99,6 +99,24 @@ sudo usermod -aG i2c,video "$USER"
 # log out and back in for groups to take effect
 ```
 
+## Releasing
+
+The project version has a **single source of truth**: `[workspace.package].version`
+in the root [`Cargo.toml`](../Cargo.toml). `tauri.conf.json` has no `version` key,
+so Tauri derives it from the crate (`CARGO_PKG_VERSION`) — that is what the
+installers, the bundle metadata and the in-app About screen (`getVersion()`) all
+report. Never hardcode a version anywhere else.
+
+To cut a release, bump in that one place with the helper, which also syncs the
+non-derivable copies (`Cargo.lock`, `app/package.json`, `app/package-lock.json`):
+
+```bash
+scripts/bump-version.sh 1.2.3
+git commit -am "release: v1.2.3"
+git tag -a v1.2.3 -m "release: v1.2.3"
+git push origin main && git push origin v1.2.3   # the tag triggers release.yml
+```
+
 ## Continuous integration
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs `fmt --check`, `clippy`, `cargo test`, the frontend build and a Tauri bundle on Windows / macOS / Linux for every push.
