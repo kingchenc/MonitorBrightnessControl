@@ -76,6 +76,19 @@ mod windows_impl {
             .map(|s| s.to_string_lossy().to_string())
     }
 
+    /// Process handle that is closed when it goes out of scope, on every path.
+    struct ProcessHandle(windows::Win32::Foundation::HANDLE);
+
+    impl Drop for ProcessHandle {
+        fn drop(&mut self) {
+            // SAFETY: the handle came from a successful OpenProcess and is
+            // closed exactly once, here.
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(self.0);
+            }
+        }
+    }
+
     fn current_exe_name() -> Option<String> {
         use windows::Win32::Foundation::HWND;
         use windows::Win32::System::Threading::{
@@ -97,11 +110,14 @@ mod windows_impl {
             if pid == 0 {
                 return None;
             }
-            let proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+            // This runs every 750 ms: a handle left open per call piles up to
+            // millions of process handles over days of uptime.
+            let proc =
+                ProcessHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?);
             let mut buf: Vec<u16> = vec![0u16; 1024];
             let mut len: u32 = buf.len() as u32;
             let sl = windows::core::PWSTR(buf.as_mut_ptr());
-            QueryFullProcessImageNameW(proc, PROCESS_NAME_FORMAT(0), sl, &mut len).ok()?;
+            QueryFullProcessImageNameW(proc.0, PROCESS_NAME_FORMAT(0), sl, &mut len).ok()?;
             buf.truncate(len as usize);
             let path = String::from_utf16_lossy(&buf);
             std::path::Path::new(&path)
