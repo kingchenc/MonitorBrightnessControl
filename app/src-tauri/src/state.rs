@@ -92,9 +92,17 @@ impl AppState {
         if on {
             self.scans.fetch_add(1, Ordering::SeqCst);
         } else {
-            let _ = self
-                .scans
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1));
+            // Decrement, but never below zero.
+            let mut n = self.scans.load(Ordering::SeqCst);
+            while n > 0 {
+                match self
+                    .scans
+                    .compare_exchange_weak(n, n - 1, Ordering::SeqCst, Ordering::SeqCst)
+                {
+                    Ok(_) => break,
+                    Err(current) => n = current,
+                }
+            }
         }
     }
 
