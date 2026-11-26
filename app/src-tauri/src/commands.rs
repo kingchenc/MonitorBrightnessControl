@@ -3,11 +3,11 @@
 use std::sync::Arc;
 
 use brightness_core::Capabilities;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::config::{self, BackupInfo, Profiles, Settings};
-use crate::state::{AppState, MonitorRow};
+use crate::state::{AppState, MonitorRow, VcpView};
 use crate::tray;
 
 #[tauri::command]
@@ -24,14 +24,14 @@ pub fn trigger_refresh(app: AppHandle, state: State<'_, Arc<AppState>>) {
     std::thread::Builder::new()
         .name("refresh".into())
         .spawn(move || {
-            let _ = app.emit("scan-state", true);
+            crate::set_scan_state(&app, &state, true);
             state.refresh_monitors();
             tray::rebuild_menu(&app, &state);
             let _ = app.emit("monitors-changed", ());
             state.refresh_brightness_cache();
             tray::rebuild_menu(&app, &state);
             let _ = app.emit("monitors-changed", ());
-            let _ = app.emit("scan-state", false);
+            crate::set_scan_state(&app, &state, false);
         })
         .ok();
 }
@@ -72,14 +72,23 @@ pub fn step_brightness(
         .collect()
 }
 
+/// Read a VCP feature, from the cache when it has been read before (also a
+/// remembered "unsupported" error). [`clear_vcp_cache`] forces a re-read.
 #[tauri::command]
 pub fn get_vcp(state: State<'_, Arc<AppState>>, id: String, code: u8) -> Result<VcpView, String> {
+    if let Some(cached) = state.vcp_cached(&id, code) {
+        return cached;
+    }
     let m = state.find(&id).ok_or_else(|| format!("no monitor {id}"))?;
-    let v = m.get_vcp(code).map_err(|e| e.to_string())?;
-    Ok(VcpView {
-        current: v.current,
-        maximum: v.maximum,
-    })
+    let read = m
+        .get_vcp(code)
+        .map(|v| VcpView {
+            current: v.current,
+            maximum: v.maximum,
+        })
+        .map_err(|e| e.to_string());
+    state.vcp_store(&id, code, read.clone());
+    read
 }
 
 #[tauri::command]
@@ -90,7 +99,23 @@ pub fn set_vcp(
     value: u16,
 ) -> Result<(), String> {
     let m = state.find(&id).ok_or_else(|| format!("no monitor {id}"))?;
-    m.set_vcp(code, value).map_err(|e| e.to_string())
+    m.set_vcp(code, value).map_err(|e| e.to_string())?;
+    state.vcp_written(&id, code, value);
+    Ok(())
+}
+
+/// Forget every cached VCP read so the next `get_vcp` asks the hardware
+/// (explicit Refresh: picks up changes made on the monitor's own menu).
+#[tauri::command]
+pub fn clear_vcp_cache(state: State<'_, Arc<AppState>>) {
+    state.clear_vcp_cache();
+}
+
+/// Whether a monitor scan is running right now. A freshly built window asks
+/// this once; afterwards it follows the `scan-state` events.
+#[tauri::command]
+pub fn scan_state(state: State<'_, Arc<AppState>>) -> bool {
+    state.is_scanning()
 }
 
 #[tauri::command]
@@ -220,12 +245,6 @@ pub struct SetResult {
 pub struct StepResult {
     pub id: String,
     pub percent: f32,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct VcpView {
-    pub current: u16,
-    pub maximum: u16,
 }
 
 /// A monitor-agnostic starting point the UI can turn into a full profile by

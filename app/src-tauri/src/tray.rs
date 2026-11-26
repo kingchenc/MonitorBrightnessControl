@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use tauri::{
-    AppHandle, Emitter, Manager,
+    AppHandle, Emitter,
     menu::{Menu, MenuBuilder, MenuEvent, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
@@ -39,16 +39,7 @@ pub fn install(app: &AppHandle, state: Arc<AppState>) -> tauri::Result<()> {
                 } = event
                 {
                     let app = tray.app_handle();
-                    if let Some(w) = app.get_webview_window("main") {
-                        // Order matters: unminimize *before* set_focus, and
-                        // focus last, so the freshly shown window actually owns
-                        // keyboard/mouse focus. Otherwise the first click in the
-                        // window only activates it and is swallowed instead of
-                        // hitting the control under the cursor.
-                        let _ = w.show();
-                        let _ = w.unminimize();
-                        let _ = w.set_focus();
-                    }
+                    crate::window::show(app);
                     // The DDC/CI + WMI roundtrips in refresh take seconds; doing
                     // them on this (UI/event-loop) thread would freeze the window
                     // we just showed. Refresh in the background and notify the UI
@@ -58,12 +49,12 @@ pub fn install(app: &AppHandle, state: Arc<AppState>) -> tauri::Result<()> {
                     std::thread::Builder::new()
                         .name("tray-refresh".into())
                         .spawn(move || {
-                            let _ = app.emit("scan-state", true);
+                            crate::set_scan_state(&app, &state, true);
                             state.refresh_monitors();
                             notify_changed(&app, &state);
                             state.refresh_brightness_cache();
                             notify_changed(&app, &state);
-                            let _ = app.emit("scan-state", false);
+                            crate::set_scan_state(&app, &state, false);
                         })
                         .ok();
                 }
@@ -152,12 +143,7 @@ fn build_menu(app: &AppHandle, state: &AppState) -> tauri::Result<Menu<tauri::Wr
 fn handle_menu_event(app: &AppHandle, state: &Arc<AppState>, event: MenuEvent) {
     let id = event.id().0.as_str().to_string();
     match id.as_str() {
-        "show" => {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
-        }
+        "show" => crate::window::show(app),
         "quit" => {
             state.request_quit();
             app.exit(0);

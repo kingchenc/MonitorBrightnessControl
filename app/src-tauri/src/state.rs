@@ -6,10 +6,11 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::Duration;
 
 use brightness_core::{Monitor, MonitorManager};
-use parking_lot::RwLock;
+use parking_lot::{Condvar, Mutex, RwLock};
 use serde::Serialize;
 
 use crate::config::{self, Profiles, Settings};
@@ -20,6 +21,13 @@ pub struct MonitorRow {
     pub name: String,
     pub kind: String,
     pub percent: Option<f32>,
+}
+
+/// A VCP feature read: current and maximum raw value.
+#[derive(Serialize, Clone, Copy, Debug)]
+pub struct VcpView {
+    pub current: u16,
+    pub maximum: u16,
 }
 
 pub struct AppState {
@@ -38,6 +46,19 @@ pub struct AppState {
     /// `quit_app` command). The Tauri RunEvent::ExitRequested handler
     /// otherwise vetoes every exit so the app keeps living in the tray.
     quitting: AtomicBool,
+    /// Number of monitor scans in flight. The main window is built on demand
+    /// and may load mid-scan (or long after one), so it asks for this instead
+    /// of assuming a scan is running.
+    scans: AtomicUsize,
+    /// VCP reads (contrast, colour preset, …) keyed by (monitor id, code),
+    /// including the error of a feature the monitor does not support. DDC/CI
+    /// reads take seconds; keeping them here rather than in the page means a
+    /// freshly built window renders instantly instead of re-reading hardware.
+    vcp_cache: RwLock<HashMap<(String, u8), Result<VcpView, String>>>,
+    /// Bumped on every settings change so the background loops can sleep
+    /// until something changes instead of waking on a timer.
+    settings_epoch: Mutex<u64>,
+    settings_changed: Condvar,
 }
 
 impl AppState {
@@ -59,7 +80,79 @@ impl AppState {
             night_mode: RwLock::new(false),
             brightness_cache: RwLock::new(HashMap::new()),
             quitting: AtomicBool::new(false),
+            scans: AtomicUsize::new(0),
+            vcp_cache: RwLock::new(HashMap::new()),
+            settings_epoch: Mutex::new(0),
+            settings_changed: Condvar::new(),
         })
+    }
+
+    /// Mark the start (`true`) or end (`false`) of a monitor scan.
+    pub fn set_scanning(&self, on: bool) {
+        if on {
+            self.scans.fetch_add(1, Ordering::SeqCst);
+        } else {
+            let _ = self
+                .scans
+                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1));
+        }
+    }
+
+    pub fn is_scanning(&self) -> bool {
+        self.scans.load(Ordering::SeqCst) > 0
+    }
+
+    pub fn vcp_cached(&self, id: &str, code: u8) -> Option<Result<VcpView, String>> {
+        self.vcp_cache.read().get(&(id.to_string(), code)).cloned()
+    }
+
+    pub fn vcp_store(&self, id: &str, code: u8, value: Result<VcpView, String>) {
+        self.vcp_cache.write().insert((id.to_string(), code), value);
+    }
+
+    /// Record a successful write. Only updates an entry already read from the
+    /// hardware (its maximum is known); otherwise the next read fetches it.
+    pub fn vcp_written(&self, id: &str, code: u8, value: u16) {
+        if let Some(Ok(v)) = self.vcp_cache.write().get_mut(&(id.to_string(), code)) {
+            v.current = value;
+        }
+    }
+
+    pub fn clear_vcp_cache(&self) {
+        self.vcp_cache.write().clear();
+    }
+
+    fn settings_touched(&self) {
+        *self.settings_epoch.lock() += 1;
+        self.settings_changed.notify_all();
+    }
+
+    /// Block until the settings change, or until `timeout` passes (`None`:
+    /// no timeout). Returns `true` when woken by a settings change.
+    pub fn wait_settings_change(&self, timeout: Option<Duration>) -> bool {
+        let mut epoch = self.settings_epoch.lock();
+        let start = *epoch;
+        match timeout {
+            None => {
+                while *epoch == start {
+                    self.settings_changed.wait(&mut epoch);
+                }
+                true
+            }
+            Some(t) => {
+                let deadline = std::time::Instant::now() + t;
+                while *epoch == start {
+                    if self
+                        .settings_changed
+                        .wait_until(&mut epoch, deadline)
+                        .timed_out()
+                    {
+                        return false;
+                    }
+                }
+                true
+            }
+        }
     }
 
     /// Synchronously query every monitor's current brightness and refresh
@@ -119,6 +212,7 @@ impl AppState {
     pub fn replace_settings(&self, s: Settings) -> std::io::Result<()> {
         config::save_settings(&s)?;
         *self.settings.write() = s;
+        self.settings_touched();
         Ok(())
     }
 
@@ -127,6 +221,7 @@ impl AppState {
     /// the file (re-saving here would create a redundant backup).
     pub fn reload_settings(&self, s: Settings) {
         *self.settings.write() = s;
+        self.settings_touched();
     }
 
     pub fn profiles(&self) -> Profiles {

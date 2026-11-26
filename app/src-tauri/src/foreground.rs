@@ -2,7 +2,9 @@
 //! whenever the OS reports a new focused application.
 //!
 //! Implementations:
-//! * **Windows** — `SetWinEventHook(EVENT_SYSTEM_FOREGROUND, ...)`.
+//! * **Windows** — `SetWinEventHook(EVENT_SYSTEM_FOREGROUND, ...)`: event
+//!   driven, idle between app switches; polls every 750 ms only if the hook
+//!   cannot be installed.
 //! * **macOS** — polls `NSWorkspace.shared.frontmostApplication.bundleIdentifier`
 //!   every second (NSWorkspace observers require an Obj-C run loop, which we
 //!   don't have on Tauri's main thread on every macOS version reliably).
@@ -31,18 +33,39 @@ pub fn install(_app: AppHandle, state: Arc<AppState>) {
 
 #[cfg(windows)]
 mod windows_impl {
-    use std::sync::Arc;
+    use std::sync::{Arc, OnceLock, mpsc};
     use std::time::Duration;
+
+    use windows::Win32::Foundation::{HMODULE, HWND};
+    use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        DispatchMessageW, EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, GetMessageW, MSG,
+        TranslateMessage, WINEVENT_OUTOFCONTEXT,
+    };
 
     use crate::state::AppState;
 
+    /// Wakes the profile worker. Capacity 1: a burst of focus changes while
+    /// the worker is busy (DDC/CI writes take seconds) collapses into one
+    /// check of whatever is in front afterwards.
+    static WAKE: OnceLock<mpsc::SyncSender<()>> = OnceLock::new();
+
+    fn wake() {
+        if let Some(tx) = WAKE.get() {
+            let _ = tx.try_send(());
+        }
+    }
+
     pub fn spawn(state: Arc<AppState>) {
-        // We poll GetForegroundWindow + GetWindowThreadProcessId + QueryFullProcessImageName
-        // every 750 ms. SetWinEventHook would be slightly more responsive but
-        // requires marshalling COM events back to a message-pump thread, which
-        // adds complexity for a profile feature where 750 ms is plenty.
+        let (tx, rx) = mpsc::sync_channel::<()>(1);
+        if WAKE.set(tx).is_err() {
+            return;
+        }
+
+        // Worker: checks the foreground app once at startup, then each time
+        // it is woken, and applies the matching profile on a change.
         std::thread::Builder::new()
-            .name("fg-watcher".into())
+            .name("fg-profiles".into())
             .spawn(move || {
                 let self_name = self_exe_name();
                 let mut last = String::new();
@@ -58,14 +81,88 @@ mod windows_impl {
                             .as_deref()
                             .is_some_and(|s| name.eq_ignore_ascii_case(s));
                         if !is_self && name != last {
+                            log::debug!("foreground app: {name}");
                             last = name.clone();
                             crate::profiles::apply_profile_for_app(&state, &name);
                         }
                     }
-                    std::thread::sleep(Duration::from_millis(750));
+                    if rx.recv().is_err() {
+                        return;
+                    }
                 }
             })
             .ok();
+
+        // Event source: the OS reports foreground changes, so nothing runs
+        // between app switches (no polling). Should the hook be unavailable
+        // or its message loop end, fall back to polling every 750 ms.
+        std::thread::Builder::new()
+            .name("fg-hook".into())
+            .spawn(|| {
+                run_hook_loop();
+                log::warn!("foreground hook unavailable; polling every 750 ms instead");
+                loop {
+                    std::thread::sleep(Duration::from_millis(750));
+                    wake();
+                }
+            })
+            .ok();
+    }
+
+    /// Install out-of-context WinEvent hooks for foreground changes and run
+    /// this thread's message loop, which delivers them. Blocks for the life
+    /// of the app; returns only if the hook could not be installed or the
+    /// loop failed.
+    fn run_hook_loop() {
+        // SAFETY: Standard Win32 idioms. The hooks are owned by this thread,
+        // which pumps messages for them and removes them before returning.
+        unsafe {
+            let foreground = SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_SYSTEM_FOREGROUND,
+                HMODULE::default(),
+                Some(on_win_event),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            );
+            if foreground.is_invalid() {
+                return;
+            }
+            // A window restored from the taskbar normally also reports
+            // FOREGROUND; this covers the cases where it does not.
+            let restored = SetWinEventHook(
+                EVENT_SYSTEM_MINIMIZEEND,
+                EVENT_SYSTEM_MINIMIZEEND,
+                HMODULE::default(),
+                Some(on_win_event),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            );
+            let mut msg = MSG::default();
+            // 0 = WM_QUIT, -1 = error: both end the loop.
+            while GetMessageW(&mut msg, HWND::default(), 0, 0).0 > 0 {
+                let _ = TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+            if !restored.is_invalid() {
+                let _ = UnhookWinEvent(restored);
+            }
+            let _ = UnhookWinEvent(foreground);
+        }
+    }
+
+    unsafe extern "system" fn on_win_event(
+        _hook: HWINEVENTHOOK,
+        _event: u32,
+        _hwnd: HWND,
+        _id_object: i32,
+        _id_child: i32,
+        _event_thread: u32,
+        _event_time: u32,
+    ) {
+        wake();
     }
 
     /// File name of our own executable, used to skip self-focus events.
@@ -110,8 +207,9 @@ mod windows_impl {
             if pid == 0 {
                 return None;
             }
-            // This runs every 750 ms: a handle left open per call piles up to
-            // millions of process handles over days of uptime.
+            // This runs on every app switch (every 750 ms in the polling
+            // fallback): a handle left open per call piles up over days of
+            // uptime.
             let proc =
                 ProcessHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?);
             let mut buf: Vec<u16> = vec![0u16; 1024];

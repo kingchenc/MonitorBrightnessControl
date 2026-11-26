@@ -2,7 +2,8 @@
 //! values around sunrise/sunset for the configured latitude/longitude.
 //!
 //! Algorithm:
-//! * Wake up every minute on a background tokio task.
+//! * While enabled, wake up every minute on a background thread; while
+//!   disabled, sleep until the settings change.
 //! * Compute today's sunrise and sunset for the configured coordinates.
 //! * Target brightness = day during the day, night during the night, with a
 //!   linear interpolation across `transition_minutes` either side of each
@@ -26,7 +27,16 @@ pub fn install(app: AppHandle, state: Arc<AppState>) {
         .name("auto-dim".into())
         .spawn(move || {
             loop {
-                std::thread::sleep(Duration::from_secs(60));
+                // Switched off: sleep until the settings change, no timer.
+                if !state.settings().auto_dim.enabled {
+                    state.wait_settings_change(None);
+                    continue;
+                }
+                // One tick a minute while on. A settings change restarts the
+                // wait (it may have switched auto-dim off again).
+                if state.wait_settings_change(Some(Duration::from_secs(60))) {
+                    continue;
+                }
                 let s = state.settings();
                 if !s.auto_dim.enabled {
                     continue;

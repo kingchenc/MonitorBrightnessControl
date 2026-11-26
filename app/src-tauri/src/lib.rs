@@ -34,10 +34,11 @@ mod profiles;
 mod scheduler;
 mod state;
 mod tray;
+mod window;
 
 use std::sync::Arc;
 
-use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
@@ -54,11 +55,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // When a second instance is launched, focus the existing window.
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
+            // When a second instance is launched, open the existing window.
+            window::show(app);
         }))
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -93,6 +91,8 @@ pub fn run() {
             commands::admin_autostart_status,
             commands::set_admin_autostart,
             commands::default_profile_templates,
+            commands::clear_vcp_cache,
+            commands::scan_state,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -118,7 +118,7 @@ pub fn run() {
                 std::thread::Builder::new()
                     .name("startup-brightness".into())
                     .spawn(move || {
-                        let _ = handle.emit("scan-state", true);
+                        set_scan_state(&handle, &state, true);
                         state.refresh_monitors();
                         tray::rebuild_menu(&handle, &state);
                         let _ = handle.emit("monitors-changed", ());
@@ -129,18 +129,16 @@ pub fn run() {
                         state.refresh_brightness_cache();
                         tray::rebuild_menu(&handle, &state);
                         let _ = handle.emit("monitors-changed", ());
-                        let _ = handle.emit("scan-state", false);
+                        set_scan_state(&handle, &state, false);
                     })
                     .ok();
             }
 
-            // Hide the main window if launched with --minimized (autostart).
-            if std::env::args().any(|a| a == "--minimized") {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
-                }
-            } else if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
+            // The main window is not created at startup (`"create": false`):
+            // launched with --minimized (autostart) the app runs tray-only
+            // with no webview at all until the user opens the window.
+            if !std::env::args().any(|a| a == "--minimized") {
+                window::show(&handle);
             }
             Ok(())
         })
@@ -158,22 +156,26 @@ pub fn run() {
             }
             RunEvent::WindowEvent {
                 label,
-                event: WindowEvent::CloseRequested { api, .. },
+                event: WindowEvent::CloseRequested { .. },
                 ..
-            } if label == "main" => {
+            } if label == window::MAIN => {
                 // Persist the window geometry — including which monitor it sits
-                // on — before hiding to the tray, so the next launch reopens it
-                // where the user left it even if the process is later killed
-                // without a clean exit (the plugin otherwise only writes on
-                // RunEvent::Exit).
+                // on — so the window is rebuilt where the user left it, also
+                // after the process is killed without a clean exit (the plugin
+                // otherwise only writes on RunEvent::Exit).
                 let _ = app.save_window_state(StateFlags::all());
-                if let Some(w) = app.get_webview_window(&label) {
-                    let _ = w.hide();
-                }
-                api.prevent_close();
+                // The close is not vetoed: the window and its whole webview
+                // process tree go away, and the app keeps running in the tray
+                // (ExitRequested above). `window::show` rebuilds it.
             }
             _ => {}
         });
+}
+
+/// Record and broadcast the start or end of a monitor scan.
+pub(crate) fn set_scan_state(app: &AppHandle, state: &AppState, on: bool) {
+    state.set_scanning(on);
+    let _ = app.emit("scan-state", on);
 }
 
 fn init_logging() {

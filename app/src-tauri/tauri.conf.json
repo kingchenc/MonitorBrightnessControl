@@ -13,6 +13,8 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu",
         "title": "Monitor Brightness Control",
         "width": 540,
         "height": 720,

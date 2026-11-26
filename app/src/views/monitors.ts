@@ -17,9 +17,11 @@ interface VcpView {
 // Client-side cache of VCP reads (contrast 0x12, colour preset 0x14, …) keyed
 // by `${monitorId}:${code}`. DDC/CI reads take seconds, so once a value is
 // known we render from the cache on every re-render instead of flashing the
-// default placeholder and re-reading the hardware each time. The cache is kept
-// up to date when the user changes a value, and is cleared on an explicit
-// Refresh so external changes are picked up.
+// default placeholder. The backend keeps its own cache too, which outlives
+// this page (the window is destroyed on close), so a reopened window answers
+// `get_vcp` instantly instead of re-reading the hardware. Both are kept up to
+// date when the user changes a value, and are cleared on an explicit Refresh
+// so external changes are picked up.
 const vcpCache = new Map<string, VcpView>();
 const vcpUnsupported = new Set<string>();
 
@@ -28,9 +30,10 @@ function vcpKey(id: string, code: number): string {
 }
 
 /** Drop all cached VCP reads so the next render re-queries the hardware. */
-export function clearVcpCache() {
+export async function clearVcpCache() {
   vcpCache.clear();
   vcpUnsupported.clear();
+  await invoke("clear_vcp_cache");
 }
 
 export async function renderMonitors(host: HTMLElement) {

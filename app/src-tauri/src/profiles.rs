@@ -8,10 +8,10 @@
 
 use std::sync::Arc;
 
-use brightness_core::Monitor;
+use brightness_core::{Monitor, VcpValue};
 
 use crate::config::{Profile, ProfileMonitorSettings};
-use crate::state::AppState;
+use crate::state::{AppState, VcpView};
 
 const VCP_CONTRAST: u8 = 0x12;
 const VCP_COLOR_PRESET: u8 = 0x14;
@@ -60,20 +60,42 @@ fn apply_override(state: &Arc<AppState>, m: &Monitor, p: &Profile, over: &Profil
         let _ = state.set_brightness(Some(id), pct as f32);
     }
     if let Some(pct) = over.contrast {
-        if let Ok(cur) = m.get_vcp(VCP_CONTRAST) {
+        // Only the maximum is needed to scale the percentage. Take it from
+        // the cache when known, saving a multi-second DDC/CI read per app
+        // switch; otherwise read the hardware (and remember the result).
+        let cur = match state.vcp_cached(id, VCP_CONTRAST) {
+            Some(Ok(v)) if v.maximum > 0 => Ok(VcpValue::new(v.current, v.maximum)),
+            _ => {
+                let read = m.get_vcp(VCP_CONTRAST);
+                if let Ok(v) = &read {
+                    state.vcp_store(
+                        id,
+                        VCP_CONTRAST,
+                        Ok(VcpView {
+                            current: v.current,
+                            maximum: v.maximum,
+                        }),
+                    );
+                }
+                read
+            }
+        };
+        if let Ok(cur) = cur {
             let abs = cur.percent_to_absolute(pct as f32);
-            if let Err(e) = m.set_vcp(VCP_CONTRAST, abs) {
-                log::warn!("apply profile {} → {} contrast: {e}", p.name, m.info().id);
+            match m.set_vcp(VCP_CONTRAST, abs) {
+                Ok(()) => state.vcp_written(id, VCP_CONTRAST, abs),
+                Err(e) => log::warn!("apply profile {} → {} contrast: {e}", p.name, m.info().id),
             }
         }
     }
     if let Some(v) = over.color_preset {
-        if let Err(e) = m.set_vcp(VCP_COLOR_PRESET, v) {
-            log::warn!(
+        match m.set_vcp(VCP_COLOR_PRESET, v) {
+            Ok(()) => state.vcp_written(id, VCP_COLOR_PRESET, v),
+            Err(e) => log::warn!(
                 "apply profile {} → {} color preset: {e}",
                 p.name,
                 m.info().id
-            );
+            ),
         }
     }
 }

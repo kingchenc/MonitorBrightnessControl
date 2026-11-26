@@ -79,7 +79,8 @@ Notable design choices, all documented in [`docs/ARCHITECTURE.md`](docs/ARCHITEC
 - DDC/CI handles are cached and serialized with a mutex — the OS APIs are not thread-safe in the way you'd hope.
 - Brightness/contrast reads are kept in a per-monitor cache so the UI and tray menu don't pay a 50–300 ms DDC/CI roundtrip on every render.
 - Heavy enumeration runs on a background thread after the window appears — startup feels instant even on machines where WMI brightness queries are slow.
-- The foreground-window watcher polls (~750 ms on Windows, 1 s on macOS/Linux) rather than hooking — much simpler and the latency is invisible at human time scales.
+- In the tray the app runs without any webview: the window is built when you open it and destroyed when you close it, so the idle footprint is one small process (~8 MB private) instead of a resident browser engine.
+- The foreground-window watcher is event driven on Windows (a WinEvent hook, idle between app switches) and polls once a second on macOS/Linux.
 
 ## Privacy
 

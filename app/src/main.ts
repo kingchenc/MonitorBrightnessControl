@@ -94,7 +94,7 @@ async function main() {
     try {
       // Explicit refresh: drop the cached VCP reads so contrast/colour are
       // re-queried from the hardware (picks up changes made outside the app).
-      clearVcpCache();
+      await clearVcpCache();
       // Fire-and-forget — the backend emits `monitors-changed` when work
       // finishes, so the UI is not held by the slow DDC/CI roundtrips.
       await invoke("trigger_refresh");
@@ -153,10 +153,17 @@ async function main() {
     autoRerenderMonitors();
   });
 
-  // Assume an initial scan is in flight: the backend kicks one off in its
-  // setup hook. The first `scan-state false` event will clear this.
-  setScanning(true);
-  setStatus(t("status.scanning"));
+  // The window is built on demand, so this page may load mid-scan or long
+  // after the last one: ask the backend instead of assuming. The listeners
+  // above are already in place, so a scan ending meanwhile is not missed.
+  let scanningNow = false;
+  try {
+    scanningNow = await invoke<boolean>("scan_state");
+  } catch {
+    // older backend / IPC hiccup — treat as idle
+  }
+  setScanning(scanningNow);
+  setStatus(t(scanningNow ? "status.scanning" : "status.ready"));
   renderActive("monitors");
 }
 

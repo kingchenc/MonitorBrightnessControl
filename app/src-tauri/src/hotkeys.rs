@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::state::AppState;
@@ -58,15 +58,7 @@ pub fn install(app: &AppHandle, state: Arc<AppState>) -> tauri::Result<()> {
             if event.state != ShortcutState::Pressed {
                 return;
             }
-            if let Some(w) = app_handle.get_webview_window("main") {
-                let visible = w.is_visible().unwrap_or(false);
-                if visible {
-                    let _ = w.hide();
-                } else {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            }
+            crate::window::toggle(&app_handle);
         }) {
             log::warn!("hotkey toggle_window '{accel}' failed: {e}");
         }

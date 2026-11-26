@@ -87,8 +87,16 @@ We therefore initialize `AppState` with an empty monitor list and spawn a `start
 
 `RunEvent::ExitRequested` fires for every exit attempt, including when the user closes the main window. We want the window-close case to keep the app alive in the tray, but a tray-Quit click to actually exit. The solution is `AppState.quitting: AtomicBool`. The tray "Quit" item and the `quit_app` command set the flag before calling `app.exit(0)`; the run-loop handler vetoes the exit (`api.prevent_exit()`) only when the flag is unset. Without this, the previous version's blanket `prevent_exit()` made Quit silently ignored.
 
-## Why per-app profiles use polling on Windows
+## Why the main window is built on demand
 
-`SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` runs in a system message-pump context. To pump events you need either a window or a dedicated message-only thread, plus careful COM apartment handling. For a feature where 750 ms latency is invisible to the user, a polling thread on `GetForegroundWindow()` is far simpler with no functional downside.
+The app spends nearly all its time in the tray. A hidden-but-alive window keeps a whole webview process tree resident — on Windows six `msedgewebview2` processes, ~180 MB, even if the window was never shown. So the `main` window is declared with `"create": false` in `tauri.conf.json`: `window::show` builds it from that config when the user opens it (tray click, tray "Show window", the toggle hotkey, or launching a second instance), and closing it destroys it instead of hiding it; `ExitRequested` keeps the process alive in the tray. Started with `--minimized` (autostart), the app never builds a webview until the window is opened. Building takes ~0.3–0.4 s.
 
-On Linux the same polling strategy reads `_NET_ACTIVE_WINDOW` via `xprop`. Wayland has no portable equivalent (each compositor exposes its own protocol), so the watcher is silently inactive on Wayland sessions — a future Mutter/Plasma extension could close that gap.
+Because the page no longer outlives a close, everything it needs lives in the backend: the scan-in-progress state (`scan_state` command) and the VCP reads (`AppState.vcp_cache`, also remembering "unsupported" errors), so a rebuilt page renders instantly without re-reading DDC/CI. The webview also runs with `--disable-gpu` (`additionalBrowserArgs`): the UI needs no GPU, and the GPU process otherwise holds ~100 MB while the window is open.
+
+## Why per-app profiles use a WinEvent hook on Windows
+
+A dedicated `fg-hook` thread installs `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` (plus `EVENT_SYSTEM_MINIMIZEEND`) out of context and blocks in its own `GetMessageW` loop, which delivers the events; no COM is involved. The callback only wakes the `fg-profiles` worker through a one-slot channel, so a burst of focus changes while a profile's DDC/CI writes are running collapses into a single check of whatever is in front afterwards. Between app switches nothing runs at all. If the hook cannot be installed, the thread falls back to waking the worker every 750 ms.
+
+The scheduler and auto-dim threads likewise sleep on a settings-change condition variable while their feature is off, instead of ticking.
+
+On Linux the polling strategy reads `_NET_ACTIVE_WINDOW` via `xprop`. Wayland has no portable equivalent (each compositor exposes its own protocol), so the watcher is silently inactive on Wayland sessions — a future Mutter/Plasma extension could close that gap.
