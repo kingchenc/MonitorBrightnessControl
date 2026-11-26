@@ -93,6 +93,8 @@ The app spends nearly all its time in the tray. A hidden-but-alive window keeps 
 
 Because the page no longer outlives a close, everything it needs lives in the backend: the scan-in-progress state (`scan_state` command) and the VCP reads (`AppState.vcp_cache`, also remembering "unsupported" errors), so a rebuilt page renders instantly without re-reading DDC/CI. The webview also runs with `--disable-gpu` (`additionalBrowserArgs`): the UI needs no GPU, and the GPU process otherwise holds ~100 MB while the window is open.
 
+Tauri's default async runtime is replaced by one with two workers (`install_async_runtime` in `lib.rs`). The default starts one tokio worker per logical CPU on the page's first IPC call, and tokio workers never exit, so after one open/close a 32-thread machine kept 32 parked workers in the tray process. All commands are synchronous and the DDC/CI work runs on its own threads, so two workers are plenty.
+
 ## Why per-app profiles use a WinEvent hook on Windows
 
 A dedicated `fg-hook` thread installs `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` (plus `EVENT_SYSTEM_MINIMIZEEND`) out of context and blocks in its own `GetMessageW` loop, which delivers the events; no COM is involved. The callback only wakes the `fg-profiles` worker through a one-slot channel, so a burst of focus changes while a profile's DDC/CI writes are running collapses into a single check of whatever is in front afterwards. Between app switches nothing runs at all. If the hook cannot be installed, the thread falls back to waking the worker every 750 ms.

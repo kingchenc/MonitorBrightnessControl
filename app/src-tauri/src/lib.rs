@@ -36,7 +36,7 @@ mod state;
 mod tray;
 mod window;
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
@@ -44,9 +44,13 @@ use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 use crate::state::AppState;
 
+/// Async runtime for Tauri and its plugins. Lives for the whole process.
+static ASYNC_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+
 /// Application entry point. Invoked from `main.rs`.
 pub fn run() {
     init_logging();
+    install_async_runtime();
 
     let state = Arc::new(AppState::initialize().expect("failed to initialize backend"));
 
@@ -170,6 +174,25 @@ pub fn run() {
             }
             _ => {}
         });
+}
+
+/// Give Tauri a small async runtime instead of its default.
+///
+/// The default is created lazily on the first IPC call from the page and
+/// starts one worker thread per logical CPU (32 on a 32-thread machine), and
+/// tokio workers never exit: after the window had been opened once, they all
+/// stayed parked in the tray process. Every command here is synchronous and
+/// the slow DDC/CI work runs on its own threads, so two workers are plenty.
+fn install_async_runtime() {
+    let runtime = ASYNC_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .thread_name("async-rt")
+            .enable_all()
+            .build()
+            .expect("failed to build the async runtime")
+    });
+    tauri::async_runtime::set(runtime.handle().clone());
 }
 
 /// Record and broadcast the start or end of a monitor scan.
